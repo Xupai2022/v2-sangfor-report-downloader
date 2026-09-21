@@ -1,0 +1,15 @@
+{
+  "name": "v2-sangfor-report-downloader",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Download mssw report tables (asset/event/alarm/vuln/weakpwd/exposed), then export xlsx reports.",
+  "main": "mssw_downloader.js",
+  "scripts": {
+    "start": "node mssw_downloader.js",
+    "response:event": "node mssw_downloader.js --response-only --type event",
+    "response:alarm": "node mssw_downloader.js --response-only --type alarm"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

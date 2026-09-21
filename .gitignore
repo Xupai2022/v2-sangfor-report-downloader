@@ -1,0 +1,13 @@
+node_modules/
+cookies.txt
+mssw_cookies.txt
+*_report.xlsx
+*_asset.xlsx
+*_event.xlsx
+*_alarm.xlsx
+*_vuln.xlsx
+*_weakpwd.xlsx
+*_exposed.xlsx
+*_response_*.json
+*.zip
+downloads/
