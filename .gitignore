@@ -1,3 +1,5 @@
+# Node 侧零依赖（package.json 没有 dependencies，Excel 读写走 Python + openpyxl）。
+# 留着这条只是保险：哪天真加了依赖，别把 node_modules 提交进来。
 node_modules/
 cookies.txt
 mssw_cookies.txt
@@ -11,3 +13,27 @@ mssw_cookies.txt
 *_response_*.json
 *.zip
 downloads/
+
+# 本地跑出来的中间产物（导出 response、调试用的 xlsx），不是仓库内容。
+# 里面可能是几 MB 的客户数据样本，不该被 `git add .` 带进仓库。
+tmp/
+
+# 总表样本含真实客户数据，只放本地：放什么见 data/samples/README.md
+data/samples/*.xlsx
+data/samples/*.csv
+!data/samples/README.md
+
+# PPT 引擎的 env 文件含 OPENAI_API_KEY，只放本地。模板见 .env.ppt.example
+.env.ppt
+
+# PPT 生成产物与引擎写入。vendor/ 反过来必须入库（它是快照，1:1 是它的价值）
+outputs/
+
+# Python 字节码
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Claude Code 的会话钩子往这里写：启动上下文、会话历史、每轮追加的 pattern 日志。
+# 纯本机状态，跟这个仓库的内容无关，只是当初被 `git add .` 扫了进来。
+.claude/temp/
