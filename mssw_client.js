@@ -72,17 +72,16 @@ const MSSW_VUL_MANAGE_EXPORT_TIMEOUT_MS = 600000;
 /**
  * 两表共用的筛选器，**一律留空 = 不过滤**。
  *
- * 逐字对过 2026-10-08 抓包的两份请求体，这里只放两边都有的键；各自独有的
+ * 逐字对过 2026-10-08 / 2026-10-09 两次抓包的两份请求体，这里只放两边都有的键；各自独有的
  * （漏洞表有 attack_type/cve/risk_level/scan_type/threat_tag，弱密码表有
  * whitelisted_status/is_show）见 MSSW_VUL_MANAGE_KINDS 的 extraFilters。
  *
- * `latest_time_range` 必须留在空数组上：留空即全量导出（用户 2026-10-08 明确「不要传时间」），
- * 与资产表同属不吃时间参数的一档。留个记录以备将来要按期导出 —— 填 [startMs, endMs]
- * （epoch 毫秒，本地时区边界）时按**「最近发现时间」**过滤（实测单日窗口返回的行全落该日；
- * 不是「首次发现时间」——某客户 13301 行里这两列有 2373 行不同，选错列差别很大）。
+ * **时间范围不在这个常量里** —— 它由 buildMsswVulManageExportRequestBody 现算
+ * （走 resolveVulManageTimeRangeMs），所以这里连 latest_time_range 这个键都不留。
+ * 出处：2026-10-08 曾按用户口径「不要传时间」留空数组，2026-10-09 用户改口 ——
+ * 两张表都要按报告期取数，并给了两份带 latest_time_range 的抓包当作样例。
  */
 const MSSW_VUL_MANAGE_BASE_FILTERS = {
-  latest_time_range: [],
   asset_ip: { op: '=', val: '' },
   asset_manager: { op: '=', val: '' },
   asset_status: [],
@@ -226,7 +225,9 @@ const MSSW_VUL_MANAGE_KINDS = {
     headerId: 'week_pass_1',
     extraFilters: {
       whitelisted_status: [],
-      is_show: 0
+      // 2026-10-09 的样例抓包是 1，2026-10-08 那份是 0 —— 按新样例取 1（用户 2026-10-09 确认）。
+      // 这个开关直接决定返回行数，不是可以随便跟一个的默认值。
+      is_show: 1
     },
     customHeaders: MSSW_WEAKPWD_EXPORT_CUSTOM_HEADERS
   }
@@ -1466,17 +1467,51 @@ async function exportMsswIncidentList(options) {
 // ---------------------------------------------------------------------------
 
 /**
+ * vul_manage 的 latest_time_range：epoch **毫秒**、本地日界，与事件表/告警表那份
+ * --start/--end 同一个口径（起 = 起始日 00:00:00.000，止 = 结束日 23:59:59.999）。
+ *
+ * 为什么不用 resolveMsswTimeRange 的返回值：那个函数把时间戳压到**秒**，收尾会变成
+ * 23:59:59.000。而本接口吃毫秒 —— 用户 2026-10-09 给的漏洞表抓包里收尾是 1791561599999
+ * （.999，浏览器侧 Math 出来的原始值），另一个弱密码抓包是 ...599000（被截过的）。
+ * 差这 999ms 正常情况碰不到，但既然毫秒粒度不花代价，就照平台真正的写法来。
+ * 校验仍然复用 resolveMsswTimeRange（格式 + 起止先后），只是不要它那个秒值。
+ *
+ * 过滤的列是**「最近发现时间」**：实测单日窗口返回的行全落该日。不是「首次发现时间」——
+ * 某客户 13301 行里这两列有 2373 行不同，选错列差别很大。
+ *
+ * 两个日期一个都没传时回落空数组 = 全量导出（`--type vuln` 单独跑仍可用）；
+ * 只传一个则照常报错，因为那多半是手滑，静默退全量会得出另一份数据。
+ *
+ * @param {object} options 认 --start/--end（也认 begin，与事件表一致）
+ * @returns {number[]} [startMs, endMs]，或空数组表示不过滤
+ */
+function resolveVulManageTimeRangeMs(options = {}) {
+  const rawStart = options.begin || options.start;
+  const rawEnd = options.end;
+  if (!rawStart && !rawEnd) return [];
+
+  resolveMsswTimeRange(options, '漏洞表/弱密码表导出');
+
+  const startMs = parseLocalDate(rawStart, false) * 1000;
+  const endMs = parseLocalDate(rawEnd, false) * 1000 + 24 * 60 * 60 * 1000 - 1;
+  return [startMs, endMs];
+}
+
+/**
  * vul_manage 导出请求体。两个 kind 共用一套筛选器，只有差异部分按 kind 取。
  *
  * @param {'vuln'|'weakpwd'} kind
+ * @param {number[]} [timeRangeMs] latest_time_range，见 resolveVulManageTimeRangeMs；
+ *   缺省空数组 = 全量。键显式放在第一个，与平台抓包里的位置一致。
  */
-function buildMsswVulManageExportRequestBody(kind) {
+function buildMsswVulManageExportRequestBody(kind, timeRangeMs = []) {
   const spec = MSSW_VUL_MANAGE_KINDS[kind];
   if (!spec) {
     throw new Error(`未知的 vul_manage 表类型: ${kind}（可选 ${Object.keys(MSSW_VUL_MANAGE_KINDS).join(' / ')}）`);
   }
 
   return {
+    latest_time_range: timeRangeMs,
     ...MSSW_VUL_MANAGE_BASE_FILTERS,
     ...spec.extraFilters,
     data_type: [spec.dataType],
@@ -1495,15 +1530,20 @@ function buildMsswVulManageExportRequestBody(kind) {
  * 文件名形如 `vul-middle-risk_20261008104536.xlsx` —— ⚠️ 里面的 "middle-risk" 是**死的**，
  * 而且**两张表共用这一个命名**（弱密码表导出的文件也叫 vul-middle-risk_*），
  * 与数据无关（实测该文件名下的漏洞表里严重/高危/中危/低危都有），别拿它当口径。
+ *
+ * 取数范围由 options.start/end 经 resolveVulManageTimeRangeMs 决定（不传 = 全量）。
  */
 async function triggerMsswVulManageExport(cookieInfo, platform, companyId, kind, options = {}) {
   const spec = MSSW_VUL_MANAGE_KINDS[kind];
   const url = platformEndpoint(platform, MSSW_VUL_MANAGE_EXPORT_ENDPOINT);
   const headers = buildMsswExportHeaders(cookieInfo, platform, companyId);
+  // 时间范围从 --start/--end 现算；调用方（exportMsswVulManageList）已经把算好的塞进
+  // options.timeRangeMs，直调本函数的探针脚本则在这里自己算。
+  const timeRangeMs = options.timeRangeMs || resolveVulManageTimeRangeMs(options);
 
   const response = await requestJson(url, {
     headers,
-    body: JSON.stringify(buildMsswVulManageExportRequestBody(kind)),
+    body: JSON.stringify(buildMsswVulManageExportRequestBody(kind, timeRangeMs)),
     timeout: Number(options.exportTimeoutMs || MSSW_VUL_MANAGE_EXPORT_TIMEOUT_MS)
   });
 
@@ -1589,7 +1629,8 @@ async function downloadMsswVulManageFile(cookieInfo, platform, companyId, fileNa
  * 落盘后的加工：两张表都删掉「处置状态」=「处置完成（误报）」的行、原地改写
  * （与事件表同一套机制）；两张表都**不加**「内网外网资产」列（那是事件表独有的）。
  *
- * @param {object} options 与其它 export* 同：msswCookiePath / msswBaseUrl / customerId / downloadDir
+ * @param {object} options 与其它 export* 同：msswCookiePath / msswBaseUrl / customerId / downloadDir，
+ *   另认 start/end（YYYY-MM-DD）—— 取数范围，不传则全量
  * @param {'vuln'|'weakpwd'} kind
  * @returns {Promise<object>} 含 filePath（xlsx 路径）、导出元信息，漏洞表另带 removedRows/totalBefore/totalAfter
  */
@@ -1600,7 +1641,11 @@ async function exportMsswVulManageList(options, kind) {
   }
 
   const logger = options.logger;
-  logInfo(logger, `导出 MSSW ${spec.label}: 全量（不传时间范围）`);
+  // 时间范围先算再打日志：这两张表最慢能跑 40s，日志里得写清这一次到底按哪一段取的数。
+  const timeRangeMs = resolveVulManageTimeRangeMs(options);
+  logInfo(logger, timeRangeMs.length
+    ? `导出 MSSW ${spec.label}: ${options.start || options.begin} ~ ${options.end}（按「最近发现时间」过滤）`
+    : `导出 MSSW ${spec.label}: 全量（未传 --start/--end，latest_time_range 留空）`);
 
   const cookieInfo = await readMsswCookieInfo(options.msswCookiePath);
   const platform = resolvePlatform(options);
@@ -1609,7 +1654,9 @@ async function exportMsswVulManageList(options, kind) {
   // 同步接口：这一行要等到平台把整份表导出完才回来（漏洞表实测全量 40s），
   // 所以日志分两句 —— 不然日志里会是一段没有解释的空白。
   const startedAt = Date.now();
-  const { fileName, response } = await triggerMsswVulManageExport(cookieInfo, platform, companyId, kind, options);
+  const { fileName, response } = await triggerMsswVulManageExport(
+    cookieInfo, platform, companyId, kind, { ...options, timeRangeMs }
+  );
   logInfo(logger, `${spec.label}导出完成: ${fileName}（服务端耗时 ${Math.round((Date.now() - startedAt) / 1000)}s）`);
 
   const downloadDir = options.downloadDir || path.dirname(cookieInfo.resolvedPath);
@@ -1705,6 +1752,7 @@ module.exports = {
   MSSW_VUL_MANAGE_EXPORT_TIMEOUT_MS,
   MSSW_VUL_MANAGE_BASE_FILTERS,
   MSSW_VUL_MANAGE_KINDS,
+  resolveVulManageTimeRangeMs,
   buildMsswVulManageExportRequestBody,
   triggerMsswVulManageExport,
   downloadMsswVulManageFile,

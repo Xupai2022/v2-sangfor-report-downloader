@@ -96,8 +96,9 @@ const TYPE_LABELS = {
   weakpwd: '弱密码表'
 };
 
-// 需要 --start/--end 的表（都是按时间范围导出）；资产表/漏洞表/弱密码表是全量导出，
-// 不吃时间参数。
+// 缺少 --start/--end 就**不能跑**的表。事件表/告警表在此列：它们没有"全量"这个模式。
+// 漏洞表/弱密码表不在此列 —— 它们按 --start/--end 取数（过滤「最近发现时间」），
+// 但日期是可选的：不传就退化成全量导出（见 mssw_client 的 resolveVulManageTimeRangeMs）。
 const TIME_RANGE_TYPES = new Set(['event', 'alarm']);
 
 function printHelp() {
@@ -118,6 +119,8 @@ Options:
   --customer-id <id>        直接指定 company_id，跳过客户名查询
   --start <YYYY-MM-DD>      时间范围起（本地 00:00:00）
   --end <YYYY-MM-DD>        时间范围止（本地 23:59:59）
+                            事件表/告警表必传；漏洞表/弱密码表也认这两个值（按「最近
+                            发现时间」过滤），不传则那两张表退化成全量导出
   --cookie-path <path>      mssw cookie 文件或目录；**传了即本地模式**（不传则走集群）
   --type <names>            只下指定表，逗号分隔：asset | alarm | event | vuln | weakpwd
                             （别名 incident / alert / 告警 / 漏洞 / 弱密码；默认下载全部）
@@ -272,17 +275,19 @@ async function downloadTable(type, ctx) {
   }
 
   if (type === 'vuln' || type === 'weakpwd') {
-    // 这两张表同源（/order/v1/vul_manage/*），都是全量导出、都不吃 --start/--end，
-    // 也都没有轮询超时 —— 同步接口自己等，等的上限在 mssw_client 里
-    // （MSSW_VUL_MANAGE_EXPORT_TIMEOUT_MS）。
+    // 这两张表同源（/order/v1/vul_manage/*），都没有轮询超时 —— 同步接口自己等，
+    // 等的上限在 mssw_client 里（MSSW_VUL_MANAGE_EXPORT_TIMEOUT_MS）。
+    // 时间范围按 --start/--end 传（2026-10-09 用户口径），不传则全量。
     const result = type === 'vuln'
-      ? await exportMsswVulnList(common)
-      : await exportMsswWeakPwdList(common);
+      ? await exportMsswVulnList({ ...common, start: options.start, end: options.end })
+      : await exportMsswWeakPwdList({ ...common, start: options.start, end: options.end });
     return {
       result,
       summary: [
         `${TYPE_LABELS[type]}: ${result.filePath}`,
-        '  全量导出（不传时间范围）',
+        options.start && options.end
+          ? `  时间范围 ${options.start} ~ ${options.end}（按「最近发现时间」过滤）`
+          : '  全量导出（未传 --start/--end，不传时间范围）',
         `  删除处置状态为「处置完成（误报）」的行 ${result.removedRows} 条（${result.totalBefore} -> ${result.totalAfter}）`
       ].join('\n')
     };
