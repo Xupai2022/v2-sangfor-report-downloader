@@ -1,0 +1,17 @@
+[Unit]
+Description=MSS AI PPT Backend
+After=network.target
+
+[Service]
+Type=simple
+User=app
+Group=app
+WorkingDirectory=/opt/report-generation
+Environment="MSS_ENV_PATH=/opt/report-generation/.env"
+ExecStart=/usr/bin/python3 -m uvicorn mss_ai_ppt_sample_assets.backend.app:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

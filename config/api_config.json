@@ -1,0 +1,30 @@
+{
+  "_comment": "sangfor 报告取数（v2-sangfor-report-downloader）API 入口集中配置。改域名/接口地址只改这里，不动业务代码。",
+  "_note": "Node 侧由 api_config.js 读取。origin 支持 env 覆盖（平台级 env 字段）；Host 头支持 host_env 覆盖（空串 = 不发 Host 头）。集群里请求一律带统一 Host 头 inner.sangfor.com.cn —— nginx 靠 Host 选虚拟主机，连接走 origin 的 http:// + 端口。",
+  "_env": "集群默认：http://mssw-inner.sangfor.com.cn:30001（2026-09-24 于 pod 内实测赢家，见下）。**入口按环境不同**：换上该环境的凭据就换这个 origin，或运行时用 REPORT_DOWNLOADER_MSSW_BASE_URL 覆盖，不必改代码。",
+  "_why_not_mssp_nginx": "曾填 http://mssp-nginx.mss-pro:8200 —— 那是 k8s Service 名（两环境同名不同后端），在那个 pod 里打过去稳定回 403/code=9451「非法操作」，即网关不认这份会话。同一份 session cookie 只把 origin 换成 mssw-inner.sangfor.com.cn:30001 就 200/code=0。**教训：参照 skill 的 config 只是副本，不能当权威** —— health-checkup-report 的 config 写着 mssp-nginx，但它自己的 SKILL.md / README / --help / 脚本 usage 全写 mssw-inner，只有 config 是旧的。",
+  "_scope": "⚠️ 本文件只在**集群模式**被消费。本地模式（传了 --cookie-path）不读这里的任何值：host 头仍等于域名、origin 仍走 https://<域名>，否则会把统一 Host 头打到 SIT 域名上直接挂。",
+
+  "platforms": {
+    "mssw": {
+      "origin": "http://mssw-inner.sangfor.com.cn:30001",
+      "env": "REPORT_DOWNLOADER_MSSW_BASE_URL",
+      "host_header": "inner.sangfor.com.cn",
+      "host_env": "REPORT_DOWNLOADER_MSSW_HOST_HEADER",
+      "referer_path": "/index.html",
+      "endpoints": {
+        "customer_statistic": "/gateway/customer-mgr-service/order/v1/user/customer_statistic",
+        "incident_export_tasks": "/gateway/mss-mdr/web/api/mssw/mss-mdr/v1/incidents/export/tasks",
+        "alert_export": "/ngsoc/INCIDENT/api/v1/operation/task/add/exportAlertExcel",
+        "alert_task_result": "/ngsoc/INCIDENT/api/v1/operation/task/result",
+        "asset_export_fields": "/apps/asset/view/asset/export_fields?_method=GET",
+        "asset_export": "/apps/asset/view/asset/export",
+        "asset_download_file": "/apps/asset/view/asset/download_file",
+        "asset_count": "/apps/asset/view/asset/asset_view/count?_method=GET",
+        "asset_list": "/apps/asset/view/asset/asset_view/list?_method=GET"
+      }
+    }
+  },
+
+  "_endpoints_todo": "endpoints 目前只是登记，mssw_client.js 仍用自己的常量（本步不做搬迁，保持改动可二分）。漏洞表/弱密码表（2026-10-08）已接，但两个接口（/order/v1/vul_manage/vul_risk_export、/order/v1/vul_manage/download_file）**仍留在 mssw_client.js 的常量里**，本文件没有登记副本 —— 别照这份 endpoints 判断哪张表接了。剩下暴露面一张表未接。"
+}

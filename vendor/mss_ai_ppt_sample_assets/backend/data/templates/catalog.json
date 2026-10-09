@@ -1,0 +1,53 @@
+{
+  "templates": [
+    {
+      "template_id": "mss_classic_ops",
+      "name": "经典模板",
+      "version": "1.0.0",
+      "descriptor_file": "legacy/classic_ops/classic_descriptor.json",
+      "pptx_file": "legacy/classic_ops/classic.pptx",
+      "deprecated": true,
+      "recommended_audience": [
+        "management",
+        "operations"
+      ],
+      "slides_count": 25,
+      "features": [
+        "excel_driven_content",
+        "classic_layout"
+      ]
+    },
+    {
+      "template_id": "mss_classic_ops_2",
+      "name": "协同运营价值复盘",
+      "version": "1.0.0",
+      "descriptor_file": "plus_descriptor.json",
+      "pptx_file": "plus.pptx",
+      "recommended_audience": [
+        "management",
+        "operations"
+      ],
+      "slides_count": 27,
+      "features": [
+        "excel_driven_content",
+        "plus_layout"
+      ]
+    },
+    {
+      "template_id": "mss_classic_ops_3",
+      "name": "托管运营价值复盘",
+      "version": "1.0.0",
+      "descriptor_file": "simple_descriptor.json",
+      "pptx_file": "simple.pptx",
+      "recommended_audience": [
+        "management",
+        "operations"
+      ],
+      "slides_count": 20,
+      "features": [
+        "excel_driven_content",
+        "simple_layout"
+      ]
+    }
+  ]
+}

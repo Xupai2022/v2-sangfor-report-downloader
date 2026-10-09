@@ -2,14 +2,20 @@
   "name": "v2-sangfor-report-downloader",
   "version": "1.0.0",
   "private": true,
-  "description": "Download mssw report tables (asset/event/alarm/vuln/weakpwd/exposed), then export xlsx reports.",
+  "description": "Download mssw report tables (asset/event/alarm/vuln/weakpwd/exposed), export xlsx reports, and generate AI PPT decks end-to-end. Node 侧零依赖：Excel 读写全部走 Python + openpyxl。",
   "main": "mssw_downloader.js",
   "scripts": {
     "start": "node mssw_downloader.js",
     "response:event": "node mssw_downloader.js --response-only --type event",
-    "response:alarm": "node mssw_downloader.js --response-only --type alarm"
-  },
-  "dependencies": {
-    "xlsx": "^0.18.5"
+    "response:alarm": "node mssw_downloader.js --response-only --type alarm",
+    "cell": "node scripts/cell.js",
+    "cell:check": "node scripts/cell.js --check",
+    "cell:todo": "node scripts/cell.js --unresolved",
+    "verify:write": "node scripts/verify_write_layer.js",
+    "ppt:generate": "node pipeline.js generate",
+    "ppt:rewrite": "node pipeline.js rewrite",
+    "ppt:slides": "node pipeline.js list-slides --template mss_classic_ops_2 --rewritable",
+    "ppt:doctor": "node pipeline.js doctor --verify-vendor --probe-engine --fingerprint --probe-llm",
+    "vendor:sync": "node scripts/vendor_sync.js"
   }
 }

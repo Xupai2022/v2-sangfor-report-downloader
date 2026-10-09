@@ -1,0 +1,2772 @@
+{
+    "code": 0,
+    "msg": "\u6210\u529f",
+    "data": {
+        "manage_sub_type": [
+            {
+                "name": "\u50f5\u5c38\u7f51\u7edc",
+                "value": "BOTNET"
+            },
+            {
+                "name": "DNS\u653e\u5927\u653b\u51fb\u653b\u51fb\u6e90\u4f2a\u9020",
+                "value": "DNS_AMPLIF_FAKESRC"
+            },
+            {
+                "name": "DNS\u96a7\u9053",
+                "value": "DNS_TUNNEL"
+            },
+            {
+                "name": "\u8bbe\u5907\u5f02\u5e38",
+                "value": "DEVICE_ABNORMAL"
+            },
+            {
+                "name": "\u6697\u7f51\u901a\u4fe1",
+                "value": "DARKNET"
+            },
+            {
+                "name": "\u9a71\u52a8\u4eba\u751f",
+                "value": "DRIVE_LIFE"
+            },
+            {
+                "name": "DNS\u6587\u4ef6\u4f20\u9001",
+                "value": "DNS_FILE_TRAN"
+            },
+            {
+                "name": "\u6316\u77ff\u75c5\u6bd2",
+                "value": "MINING_VIRUS"
+            },
+            {
+                "name": "\u5b9a\u65f6\u4efb\u52a1",
+                "value": "SCHEDULED_TASK"
+            },
+            {
+                "name": "\u8815\u866b\u75c5\u6bd2",
+                "value": "WORM"
+            },
+            {
+                "name": "\u5185\u7f51\u626b\u63cf",
+                "value": "INTRANET_SCAN"
+            },
+            {
+                "name": "\u9ebb\u8fa3\u9999\u9505\u75c5\u6bd2",
+                "value": "SPICY_POT_VIRUS"
+            },
+            {
+                "name": "\u4e0b\u8f7d\u53ef\u7591\u6587\u4ef6",
+                "value": "DOWNLOAD_SUSFILE"
+            },
+            {
+                "name": "\u6d41\u6c13\u8f6f\u4ef6",
+                "value": "ROGUE_SOFTWARE"
+            },
+            {
+                "name": "\u5f02\u5e38HTTP\u8bbf\u95ee",
+                "value": "ABNORMAL_HTTP CONNECT"
+            },
+            {
+                "name": "\u75c5\u6bd2\u6728\u9a6c",
+                "value": "VIRUS_TROJAN"
+            },
+            {
+                "name": "\u6570\u636e\u6536\u96c6",
+                "value": "DATA_COLLECT"
+            },
+            {
+                "name": "\u6076\u610f\u6587\u4ef6",
+                "value": "MALICIOUS_FILES"
+            },
+            {
+                "name": "\u5f02\u5e38\u5916\u53d1\u6d41\u91cf",
+                "value": "ABNORMAL_TRAFFIC"
+            },
+            {
+                "name": "\u98de\u5ba2\u8815\u866b",
+                "value": "PHREAK_WORMS"
+            },
+            {
+                "name": "\u5185\u7f51Dos\u653b\u51fb",
+                "value": "INTRANET_DOS"
+            },
+            {
+                "name": "ramnit\u75c5\u6bd2",
+                "value": "RAMNIT_PROXY"
+            },
+            {
+                "name": "\u5f02\u5e38\u8bbf\u95ee",
+                "value": "ABNORMAL_ACCESS"
+            },
+            {
+                "name": "\u5f02\u5e38\u5916\u8fde",
+                "value": "ABNORMAL_CONNECTION"
+            },
+            {
+                "name": "\u9493\u9c7c\u90ae\u4ef6",
+                "value": "PHISHING"
+            },
+            {
+                "name": "\u5783\u573e\u90ae\u4ef6",
+                "value": "SPAM"
+            },
+            {
+                "name": "\u90ae\u4ef6\u649e\u5e93",
+                "value": "MAIL_BRUTE_FORCE"
+            },
+            {
+                "name": "\u66b4\u529b\u7834\u89e3",
+                "value": "BRUTE_FORCE"
+            },
+            {
+                "name": "\u8001\u88c1\u7f1d\u75c5\u6bd2",
+                "value": "OLD_TAILOR_VIRUS"
+            },
+            {
+                "name": "agent\u6728\u9a6c",
+                "value": "AGENT_TROJAN"
+            },
+            {
+                "name": "\u6a2a\u5411\u4f20\u64ad",
+                "value": "LATERAL_TRANS"
+            },
+            {
+                "name": "malware\u75c5\u6bd2",
+                "value": "MALWARE_VIRUS"
+            },
+            {
+                "name": "\u6f0f\u6d1e\u5229\u7528\u653b\u51fb",
+                "value": "EXPLOIT"
+            },
+            {
+                "name": "HTTPS\u96a7\u9053",
+                "value": "HTTPS_TUNNEL"
+            },
+            {
+                "name": "\u4fe1\u606f\u641c\u96c6",
+                "value": "INFORMATION_COLLECT"
+            },
+            {
+                "name": "\u52d2\u7d22\u75c5\u6bd2",
+                "value": "RANSOMWARE"
+            },
+            {
+                "name": "\u7cfb\u7edf\u5185\u6838\u6f0f\u6d1e",
+                "value": "SYSKERNEL_VULNERABILITIES"
+            },
+            {
+                "name": "\u5fae\u9694\u79bb",
+                "value": "MICRO_SEGREGATION"
+            },
+            {
+                "name": "\u5f02\u5e38\u8d26\u53f7\u767b\u5f55",
+                "value": "ABNORMAL_ACCOUNT_LOGIN"
+            },
+            {
+                "name": "\u8fdd\u89c4\u8bbf\u95ee",
+                "value": "ACCESS_VIOLATIONS"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u547d\u4ee4\u6267\u884c",
+                "value": "REMOTE_COMMAND_EXECUTION"
+            },
+            {
+                "name": "\u5f02\u5e38\u767b\u5f55",
+                "value": "ABNORMAL_LOGIN"
+            },
+            {
+                "name": "webshell\u540e\u95e8",
+                "value": "WEBSHELL_BACKDOOR"
+            },
+            {
+                "name": "\u540e\u95e8\u8f6f\u4ef6",
+                "value": "BACKDOOR_SOFTWARE"
+            },
+            {
+                "name": "LLMNR\u6b3a\u9a97",
+                "value": "LLMNR SPOOFING"
+            },
+            {
+                "name": "frp\u540e\u95e8",
+                "value": "FRP_BACKDOOR"
+            },
+            {
+                "name": "NBNS\u6b3a\u9a97",
+                "value": "NBNS_SPOOFING"
+            },
+            {
+                "name": "\u906d\u53d7\u5916\u7f51RDP\u7206\u7834",
+                "value": "RDP_BRUTE"
+            },
+            {
+                "name": "WPADLLMNR",
+                "value": "WPADLLMNR"
+            },
+            {
+                "name": "\u53ef\u7591\u6d4b\u8bd5\u6587\u4ef6",
+                "value": "SUSPICIOUS_TEST_FILE"
+            },
+            {
+                "name": "WPADNBNS",
+                "value": "WPADNBNS"
+            },
+            {
+                "name": "WEB\u66b4\u529b\u7834\u89e3",
+                "value": "WEB_BRUTE_FORCE"
+            },
+            {
+                "name": "\u7aef\u53e3\u626b\u63cf",
+                "value": "PORT_SCAN"
+            },
+            {
+                "name": "VPN\u66b4\u529b\u7834\u89e3",
+                "value": "VPN_BRUTE_FORCE"
+            },
+            {
+                "name": "\u53cd\u5f39shell",
+                "value": "REBOUND_SHELL"
+            },
+            {
+                "name": "\u7f51\u9875\u6316\u77ff",
+                "value": "WEB_MINING"
+            },
+            {
+                "name": "\u5a01\u80c1\u60c5\u62a5",
+                "value": "THREAT_INTELLIGENCE"
+            },
+            {
+                "name": "\u65e5\u5fd7\u88ab\u6e05\u9664",
+                "value": "THE_LOG_IS_CLEARED"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u4ee3\u7801\u6267\u884c",
+                "value": "REMOTE_CODE_EXECUTION"
+            },
+            {
+                "name": "\u4e8b\u4ef6\u65e5\u5fd7\u670d\u52a1\u88ab\u5173\u95ed",
+                "value": "EVENT_LOG_SERVICE_IS_TURNED_OFF"
+            },
+            {
+                "name": "\u75c5\u6bd2\u67e5\u6740",
+                "value": "VIRUS_KILLING"
+            },
+            {
+                "name": "web\u653b\u51fb",
+                "value": "WEB_ATTACK"
+            },
+            {
+                "name": "VPN\u5f02\u5e38\u767b\u5f55",
+                "value": "VPN_ABNORMAL_LOGIN"
+            },
+            {
+                "name": "\u4e3b\u673a\u5f02\u5e38",
+                "value": "HOST_ABNORMAL"
+            },
+            {
+                "name": "\u6076\u610f\u811a\u672c",
+                "value": "MALICIOUS_SCRIPT"
+            },
+            {
+                "name": "\u626b\u63cf\u653b\u51fb",
+                "value": "SERVER_SCAN"
+            },
+            {
+                "name": "Dos\u653b\u51fb",
+                "value": "DOS_ATTACK"
+            },
+            {
+                "name": "webshell\u626b\u63cf",
+                "value": "WEBSHELL_SCAN"
+            },
+            {
+                "name": "\u9ad8\u7ea7\u9ed1\u5ba2",
+                "value": "SENIOR_HACKER"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u670d\u52a1\u521b\u5efa",
+                "value": "REMOTE_SERVER_CREATE"
+            },
+            {
+                "name": "\u5371\u9669\u8d26\u53f7",
+                "value": "RISK_ACCOUNT"
+            },
+            {
+                "name": "\u4e3b\u673a\u5f02\u5e38\u884c\u4e3a",
+                "value": "HOST_ABNORMAL_BEHAVIOR"
+            },
+            {
+                "name": "Xshell\u540e\u95e8",
+                "value": "XSHELL_BACKDOOR"
+            },
+            {
+                "name": "\u57df\u63a7\u6e17\u900f",
+                "value": "DOMAIN_CONTROL_PENETRATION"
+            },
+            {
+                "name": "\u5176\u4ed6\u5f02\u5e38\u884c\u4e3a",
+                "value": "OTHER_ABNORMAL_BEHAVIOR"
+            },
+            {
+                "name": "ngrok\u4ee3\u7406",
+                "value": "NGROK_PROXY"
+            },
+            {
+                "name": "frp\u4ee3\u7406",
+                "value": "FRP_PROXY"
+            },
+            {
+                "name": "\u6c38\u6052\u4e4b\u84dd",
+                "value": "ETERNAL_BLUE"
+            },
+            {
+                "name": "webshell\u4e0a\u4f20",
+                "value": "WEBSHELL_UPLOAD_SMALL"
+            },
+            {
+                "name": "\u9493\u9c7c\u7f51\u7ad9",
+                "value": "PHISHING_WEBSITES"
+            },
+            {
+                "name": "\u8d4c\u535a\u7f51\u7ad9",
+                "value": "GAMBLING_WEBSITES"
+            },
+            {
+                "name": "\u6728\u9a6c",
+                "value": "TROJAN_HORSE"
+            },
+            {
+                "name": "\u5916\u8054\u5f02\u5e38",
+                "value": "OUTREACH_ABNORMAL"
+            },
+            {
+                "name": "\u8272\u60c5\u7f51\u7ad9",
+                "value": "PORNOGRAPHIC_WEBSITE"
+            },
+            {
+                "name": "\u8d26\u53f7\u7206\u7834",
+                "value": "ACCOUNT_BLASTING"
+            },
+            {
+                "name": "\u6076\u610f\u7f51\u7ad9",
+                "value": "MALICIOUS_WEBSITE"
+            },
+            {
+                "name": "\u6316\u77ff",
+                "value": "MINING"
+            },
+            {
+                "name": "\u6f0f\u6d1e\u98ce\u9669",
+                "value": "VULNERABILITY_RISK"
+            },
+            {
+                "name": "\u5f00\u6e90\u548c\u5546\u4e1a\u5e94\u7528\u6f0f\u6d1e",
+                "value": "OS_BUSI_VULNERABILITIES"
+            },
+            {
+                "name": "\u7f51\u7ad9\u626b\u63cf",
+                "value": "WEBSITE_SCAN"
+            },
+            {
+                "name": "IoT\u8bbe\u5907\u6f0f\u6d1e",
+                "value": "IOT_DEVICE_VULNERABILITIES"
+            },
+            {
+                "name": "\u7279\u5b9a\u7aef\u53e3\u626b\u63cf",
+                "value": "SPE_PORT_SCAN"
+            },
+            {
+                "name": "IP\u626b\u63cf",
+                "value": "IP_SCACN"
+            },
+            {
+                "name": "\u7aef\u53e3\u626b\u63cf\u884c\u4e3a",
+                "value": "PORT_SCANNING_BEHAVIOR"
+            },
+            {
+                "name": "ICMP\u626b\u63cf",
+                "value": "ICMP_SCAN"
+            },
+            {
+                "name": "web\u6846\u67b6\u6f0f\u6d1e",
+                "value": "WEB_FRAMEWORK_VULNERABILITIES"
+            },
+            {
+                "name": "ARP\u626b\u63cf",
+                "value": "ARP_SCAN"
+            },
+            {
+                "name": "NetBIOS\u626b\u63cf",
+                "value": "NET_BIOS_SCAN"
+            },
+            {
+                "name": "\u6587\u4ef6\u5305\u542b",
+                "value": "FILE_CONTAINS"
+            },
+            {
+                "name": "WebShell\u4e0a\u4f20",
+                "value": "WEBSHELL_UPLOAD"
+            },
+            {
+                "name": "\u76ee\u5f55\u904d\u5386",
+                "value": "DIRECTORY_TRAVERSAL"
+            },
+            {
+                "name": "\u4ee3\u7801\u6ce8\u5165",
+                "value": "CODE_INJECTION"
+            },
+            {
+                "name": "\u53cd\u5e8f\u5217\u5316",
+                "value": "DESERIALIZATION"
+            },
+            {
+                "name": "\u4fe1\u606f\u6cc4\u9732",
+                "value": "INFORMATION_LEAKAGE"
+            },
+            {
+                "name": "\u8bf7\u6c42\u4f2a\u9020\u7c7b\u578b",
+                "value": "REQUEST_FORGERY_TYPE"
+            },
+            {
+                "name": "\u81ea\u5b9a\u4e49WAF\u89c4\u5219",
+                "value": "CUSTOM_WAF_RULES"
+            },
+            {
+                "name": "\u649e\u5e93\u653b\u51fb",
+                "value": "VAULT_ATTACK"
+            },
+            {
+                "name": "\u7aef\u53e3\u8f6c\u53d1",
+                "value": "PORT_FORWARDING"
+            },
+            {
+                "name": "\u672a\u6388\u6743\u5229\u7528",
+                "value": "UNAUTHORIZED_USE"
+            },
+            {
+                "name": "\u6b3a\u8bc8\u90ae\u4ef6",
+                "value": "FRAUD"
+            },
+            {
+                "name": "\u75c5\u6bd2\u90ae\u4ef6",
+                "value": "VIRUS_MAIL"
+            },
+            {
+                "name": "TCP flood",
+                "value": "TCP_FLOOD"
+            },
+            {
+                "name": "UDP flood",
+                "value": "UDP_FLOOD"
+            },
+            {
+                "name": "syn flood",
+                "value": "SYN_FLOOD"
+            },
+            {
+                "name": "DNS flood",
+                "value": "DNS_FLOOD"
+            },
+            {
+                "name": "ICMP flood",
+                "value": "ICMP_FLOOD"
+            },
+            {
+                "name": "ARP flood",
+                "value": "ARP_FLOOD"
+            },
+            {
+                "name": "\u672a\u77e5\u534f\u8baeflood",
+                "value": "UNKNOWN_PROTOCOL_FLOOD"
+            },
+            {
+                "name": "\u5f02\u5e38IP\u62a5\u6587",
+                "value": "ABNORMAL_IP_PACKET"
+            },
+            {
+                "name": "CC\u9632\u62a4\u653b\u51fb",
+                "value": "CC_PROTECTION_ATTACK"
+            },
+            {
+                "name": "Web\u4e2d\u95f4\u4ef6\u6f0f\u6d1e",
+                "value": "WEB_MIDDLEWARE_VULNERABILITIES"
+            },
+            {
+                "name": "\u5ba2\u6237\u7aef\u5e94\u7528\u6f0f\u6d1e",
+                "value": "CLIENT_APPLY_VULNERABILITIES"
+            },
+            {
+                "name": "\u865a\u62df\u5316\u5e94\u7528\u6f0f\u6d1e",
+                "value": "VIRTUAL_APPLY_VULNERABILITIES"
+            },
+            {
+                "name": "\u7cfb\u7edf\u670d\u52a1\u6f0f\u6d1e",
+                "value": "SYS_SERVICE_VULNERABILITIES"
+            },
+            {
+                "name": "\u81ea\u5b9a\u4e49IPS\u6f0f\u6d1e",
+                "value": "CUSTOM_IPS_VULNERABILITY"
+            },
+            {
+                "name": "\u5176\u4ed6\u6f0f\u6d1e",
+                "value": "OTHER_VULNERABILITIES"
+            },
+            {
+                "name": "\u626b\u63cf\u5de5\u5177",
+                "value": "SCANNING_TOOL"
+            },
+            {
+                "name": "\u722c\u866b\u5de5\u5177",
+                "value": "CRAWLER_TOOL"
+            },
+            {
+                "name": "\u6570\u636e\u5e93\u653b\u51fb\u5229\u7528",
+                "value": "DB_ATTACK_EXPLOITATION"
+            },
+            {
+                "name": "\u4e0b\u8f7d\u6076\u610f\u6587\u4ef6",
+                "value": "DLOAD_MALICIOUS_FILES"
+            },
+            {
+                "name": "\u5185\u7f51\u4f20\u64ad\u75c5\u6bd2",
+                "value": "INTRANET_SPREAD_VIRUS"
+            },
+            {
+                "name": "\u8815\u866b",
+                "value": "WORMS"
+            },
+            {
+                "name": "\u6d41\u6c13\u63a8\u5e7f\u8f6f\u4ef6",
+                "value": "ROGUE_PROMOTION_SOFTWARE"
+            },
+            {
+                "name": "\u611f\u67d3\u578b\u75c5\u6bd2",
+                "value": "INFECTIOUS_VIRUS"
+            },
+            {
+                "name": "Rootkit\u75c5\u6bd2",
+                "value": "ROOTKIT_VIRUS"
+            },
+            {
+                "name": "\u666e\u901a\u75c5\u6bd2",
+                "value": "COMMON_VIRUS"
+            },
+            {
+                "name": "\u53ef\u7591\u9ed8\u8ba4\u5171\u4eab",
+                "value": "SUSPICIOUS_DEFAULT_SHARE"
+            },
+            {
+                "name": "\u7cfb\u7edf\u4fe1\u606f\u63a2\u6d4b",
+                "value": "SYSTEM_INFO_DETECTION"
+            },
+            {
+                "name": "\u53ef\u7591\u7ba1\u9053\u5229\u7528",
+                "value": "SUSPICIOUS_PIPELINE_USE"
+            },
+            {
+                "name": "\u65b0\u589e\u670d\u52a1\u7aef\u53e3",
+                "value": "NEW_SERVICE_PORT"
+            },
+            {
+                "name": "\u57df\u63a7\u8bbf\u95ee\u91cf\u5f02\u5e38",
+                "value": "DOMAIN_TRAFFIC_ABNORMAL"
+            },
+            {
+                "name": "\u6570\u636e\u64cd\u4f5c\u5f02\u5e38",
+                "value": "ABNORMAL_DATA_OPERATION"
+            },
+            {
+                "name": "\u6570\u636e\u4f20\u8f93\u5f02\u5e38",
+                "value": "ABNORMAL_DATA_TRANSMISSION"
+            },
+            {
+                "name": "\u8fdc\u63a7\u884c\u4e3a",
+                "value": "REMOTE_CONTROL_BEHAVIOR"
+            },
+            {
+                "name": "IRC\u6d41\u91cf\u5f02\u5e38",
+                "value": "IRC_TRAFFIC_ABNORMAL"
+            },
+            {
+                "name": "HFS\u6d41\u91cf\u5f02\u5e38",
+                "value": "HFS_TRAFFIC_ABNORMAL"
+            },
+            {
+                "name": "Socks\u6d41\u91cf\u5f02\u5e38",
+                "value": "SOCKS_TRAFFIC_ABNORMAL"
+            },
+            {
+                "name": "Tor\u6d41\u91cf\u5f02\u5e38",
+                "value": "TOR_TRAFFIC_ABNORMAL"
+            },
+            {
+                "name": "HTTP\u6d41\u91cf\u5f02\u5e38",
+                "value": "HTTP_TRAFFIC_ABNORMAL"
+            },
+            {
+                "name": "FTP\u6d41\u91cf\u5f02\u5e38",
+                "value": "FTP_TRAFFIC_ABNORMAL"
+            },
+            {
+                "name": "DNS\u6d41\u91cf\u5f02\u5e38",
+                "value": "DNS_TRAFFIC_ABNORMAL"
+            },
+            {
+                "name": "ICMP\u6d41\u91cf\u5f02\u5e38",
+                "value": "ICMP_TRAFFIC_ABNORMAL"
+            },
+            {
+                "name": "\u7aef\u53e3\u534f\u8bae\u5f02\u5e38",
+                "value": "PORT_PROTOCOL_ABNORMAL"
+            },
+            {
+                "name": "\u5f02\u5e38\u52a0\u5bc6\u6d41\u91cf",
+                "value": "ABNORMAL_ENCRYPTED_TRAFFIC"
+            },
+            {
+                "name": "\u4e0a\u4e0b\u884c\u6d41\u91cf\u5f02\u5e38",
+                "value": "ABNORMAL_UPSTREAM_DOWNSTREAM_TRAFFIC"
+            },
+            {
+                "name": "\u5176\u4ed6\u6d41\u91cf\u5f02\u5e38",
+                "value": "OTHER_ABNORMAL_TRAFFIC"
+            },
+            {
+                "name": "\u5f02\u5e38\u5730\u70b9\u767b\u5f55",
+                "value": "ABNORMAL_LOCATION_REGISTRATION"
+            },
+            {
+                "name": "\u5f02\u5e38\u65f6\u95f4\u767b\u5f55",
+                "value": "UNUSUAL_TIME_LOGIN"
+            },
+            {
+                "name": "\u5f02\u5e38\u65b9\u5f0f\u767b\u5f55",
+                "value": "LOGIN_ABNORMAL"
+            },
+            {
+                "name": "\u65b0\u8d26\u6237\u767b\u5f55",
+                "value": "NEW_ACCOUNT_LOGIN"
+            },
+            {
+                "name": "\u5f02\u5e38\u8bbe\u5907\u767b\u5f55",
+                "value": "ABNORMAL_DEVICE_LOGIN"
+            },
+            {
+                "name": "\u6df7\u5408\u653b\u51fb\u7a0b\u5e8f",
+                "value": "HYBRID_ATTACK_PROGRAM"
+            },
+            {
+                "name": "\u7f51\u9875\u5185\u5d4c\u6076\u610f\u4ee3\u7801",
+                "value": "MALICIOUS_CODE_EMBEDDED_IN_THE_WEB_PAGE"
+            },
+            {
+                "name": "\u5176\u4ed6\u6709\u5bb3\u7a0b\u5e8f",
+                "value": "OTHER_MALICIOUS_PROGRAMS"
+            },
+            {
+                "name": "\u62d2\u7edd\u670d\u52a1\u653b\u51fb",
+                "value": "DENIAL_OF_SERVICE_ATTACK"
+            },
+            {
+                "name": "\u6f0f\u6d1e\u653b\u51fb",
+                "value": "VULNERABILITY_ATTACK"
+            },
+            {
+                "name": "\u7f51\u7edc\u626b\u63cf\u7a83\u542c",
+                "value": "NETWORK_SCANNING_EAVESDROPPING"
+            },
+            {
+                "name": "\u7f51\u7edc\u9493\u9c7c",
+                "value": "NET_PHISHING"
+            },
+            {
+                "name": "\u5e72\u6270\u4e8b\u4ef6",
+                "value": "INTERFERENCE_EVENT"
+            },
+            {
+                "name": "\u5176\u4ed6",
+                "value": "OTHER"
+            },
+            {
+                "name": "\u6587\u4ef6\u5199\u5165",
+                "value": "FILE_WRITE"
+            },
+            {
+                "name": "\u547d\u4ee4\u6267\u884c",
+                "value": "COMMAND_EXECUTING"
+            },
+            {
+                "name": "\u5f02\u5e38\u64cd\u4f5c",
+                "value": "ABNORMAL_ARTIFACT"
+            },
+            {
+                "name": "\u6570\u636e\u7a83\u53d6",
+                "value": "DATA_THEFT"
+            },
+            {
+                "name": "\u5e7f\u544a\u8f6f\u4ef6",
+                "value": "ADWARE"
+            },
+            {
+                "name": "\u6fc0\u6d3b\u5de5\u5177",
+                "value": "ACTIVATOR"
+            },
+            {
+                "name": "\u53ef\u7591\u8fdb\u7a0b\u884c\u4e3a",
+                "value": "SUSPICIOUS_PROCESS_BEHAVIOR"
+            },
+            {
+                "name": "\u6570\u636e\u5e93\u6f0f\u6d1e",
+                "value": "DB_VULNERABILITIES"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u63a7\u5236",
+                "value": "REMOTE_CONTROL"
+            },
+            {
+                "name": "\u6a2a\u5411\u79fb\u52a8",
+                "value": "HORIZONTAL_MOVEMENT"
+            },
+            {
+                "name": "\u5bb9\u5668\u8fd0\u884c\u65f6\u884c\u4e3a\u5f02\u5e38",
+                "value": "ABNORMAL_CONTAINER_RUNTIME_BEHAVIOR"
+            },
+            {
+                "name": "\u5bb9\u5668\u6f0f\u6d1e\u5229\u7528",
+                "value": "CONTAINER_VULNERABILITY_EXPLOITATION"
+            },
+            {
+                "name": "\u6570\u636e\u6cc4\u9732",
+                "value": "DATA_BREACH"
+            },
+            {
+                "name": "\u4eff\u5192\u884c\u4e3a",
+                "value": "SPOOFING"
+            },
+            {
+                "name": "\u660e\u6587\u5bc6\u7801",
+                "value": "CLEAR_TEXT_PASSWORD"
+            },
+            {
+                "name": "ICMP\u6d2a\u6c34\u653b\u51fb",
+                "value": "ICMP_FLOOD_ATTACK"
+            },
+            {
+                "name": "DGA\u57df\u540d",
+                "value": "DGA_DOMAIN_NAME"
+            },
+            {
+                "name": "\u53e3\u4ee4\u66b4\u529b\u7834\u89e3",
+                "value": "PASSWORD_BRUTE_FORCE"
+            },
+            {
+                "name": "\u786c\u7f16\u7801\u57df\u540d",
+                "value": "HARDCODED_DOMAIN_NAME"
+            },
+            {
+                "name": "WEB\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "WEB_SERVER_VULNERABILITY"
+            },
+            {
+                "name": "\u9ed1\u5ba2\u5de5\u5177",
+                "value": "HACKING_TOOL"
+            },
+            {
+                "name": "database\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "DATABASE_SERVER_VULNERABILITY"
+            },
+            {
+                "name": "\u7cfb\u7edf\u547d\u4ee4\u6ce8\u5165\u6f0f\u6d1e",
+                "value": "SYSTEM_COMMAND_INJECTION_VULNERABILITY"
+            },
+            {
+                "name": "\u6e17\u900f\u6846\u67b6",
+                "value": "PENETRATION_FRAMEWORK"
+            },
+            {
+                "name": "\u4e3b\u673a\u906d\u53d7\u4e92\u8054\u7f51SMB\u626b\u63cf\u653b\u51fb",
+                "value": "HOST_SMB_SCANNING_ATTACK"
+            },
+            {
+                "name": "\u9690\u79d8\u96a7\u9053",
+                "value": "HIDDEN_TUNNEL"
+            },
+            {
+                "name": "ARP\u6d2a\u6c34\u653b\u51fb",
+                "value": "ARP_FLOOD_ATTACK"
+            },
+            {
+                "name": "web\u540e\u95e8",
+                "value": "WEB_BACKDOOR"
+            },
+            {
+                "name": "\u9ed1\u94fe",
+                "value": "BLACK_CHAIN"
+            },
+            {
+                "name": "\u5185\u7f51SMB\u626b\u63cf\u653b\u51fb",
+                "value": "SMB_SCANNING_ATTACK"
+            },
+            {
+                "name": "Web\u6574\u7ad9\u7cfb\u7edf\u6f0f\u6d1e",
+                "value": "WEB_SYSTEM_VULNERABILITY"
+            },
+            {
+                "name": "\u4e3b\u673a\u5229\u7528SMB\u4f20\u64ad\u75c5\u6bd2\u6587\u4ef6",
+                "value": "HOST_SMB_FILES"
+            },
+            {
+                "name": "DNS\u5f02\u5e38",
+                "value": "DNS_ABNORMAL"
+            },
+            {
+                "name": "\u914d\u7f6e\u9519\u8bef\u6f0f\u6d1e",
+                "value": "CONFIGURATION_ERROR"
+            },
+            {
+                "name": "\u611f\u67d3\u6076\u610f\u6587\u4ef6",
+                "value": "INFECT_MALICIOUS_FILES"
+            },
+            {
+                "name": "HFS\u901a\u4fe1",
+                "value": "HFS_COMMUNICATION"
+            },
+            {
+                "name": "\u6587\u4ef6\u4e0a\u4f20\u6f0f\u6d1e",
+                "value": "FILE_UPLOAD_VULNERABILITY"
+            },
+            {
+                "name": "\u8bbf\u95ee\u7279\u5b9a\u75c5\u6bd2\u5bb6\u65cf",
+                "value": "SPEC_VIRUS_FAMILY"
+            },
+            {
+                "name": "UDP\u6d2a\u6c34\u653b\u51fb",
+                "value": "UDP_FLOOD_ATTACK"
+            },
+            {
+                "name": "IRC\u901a\u4fe1",
+                "value": "IRC_COMMUNICATION"
+            },
+            {
+                "name": "\u95f4\u8c0d\u8f6f\u4ef6",
+                "value": "SPYWARE"
+            },
+            {
+                "name": "\u6570\u636e\u5e93\u7aef\u53e3IP\u626b\u63cf",
+                "value": "DB_PORT_IP_SCAN"
+            },
+            {
+                "name": "ldap\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "LDAP_SERVER_VULNERABILITY"
+            },
+            {
+                "name": "ssh\u7aef\u53e3IP\u626b\u63cf",
+                "value": "SSH_PORT_IP_SCAN"
+            },
+            {
+                "name": "\u4ee3\u7406\u5de5\u5177",
+                "value": "PROXY_TOOL"
+            },
+            {
+                "name": "\u7cfb\u7edf\u540e\u95e8",
+                "value": "SYSTEM_BACKDOOR"
+            },
+            {
+                "name": "\u975e\u6807\u51c6\u7aef\u53e3\u8dd1\u6807\u51c6\u534f\u8bae",
+                "value": "NON_PORTS_RUN_PROTOCOLS"
+            },
+            {
+                "name": "\u8de8\u7ad9\u811a\u672c(XSS)\u6f0f\u6d1e",
+                "value": "XSS_VULNERABILITIES"
+            },
+            {
+                "name": "\u6076\u610f\u8fdc\u63a7\u5de5\u5177",
+                "value": "MALICIOUS_CONTROL_TOOL"
+            },
+            {
+                "name": "\u5f02\u5e38UA",
+                "value": "ABNORMAL_UA"
+            },
+            {
+                "name": "\u7f51\u7ad9\u653b\u51fb",
+                "value": "WEBSER_ATTACK"
+            },
+            {
+                "name": "webshell\u8bbf\u95ee",
+                "value": "WEBSHELL_ACCESS"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u6587\u4ef6\u5305\u542b\u6f0f\u6d1e",
+                "value": "RF_CONTAINS_VULNERABILITIES"
+            },
+            {
+                "name": "\u52d2\u7d22",
+                "value": "BLACKMAIL"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u6267\u884c",
+                "value": "REMOTE_EXECUTION"
+            },
+            {
+                "name": "ftp\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "FTP_SERVER_VULNERABILITY"
+            },
+            {
+                "name": "web\u7aef\u53e3IP\u626b\u63cf",
+                "value": "WEB_PORT_IP_SCAN"
+            },
+            {
+                "name": "ftp\u7aef\u53e3IP\u626b\u63cf",
+                "value": "FTP_PORT_IP_SCAN"
+            },
+            {
+                "name": "\u7f51\u9875\u6302\u9a6c",
+                "value": "WEB_HANGING_HORSE"
+            },
+            {
+                "name": "vnc\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "VNC_SERVER_VULNERABILITY"
+            },
+            {
+                "name": "\u4e1a\u52a1\u8fdd\u89c4\u8bbf\u95ee",
+                "value": "BUSINESS_VIOLATION_ACCESS"
+            },
+            {
+                "name": "CC\u653b\u51fb\u9632\u62a4",
+                "value": "CC_attack_protection"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u521b\u5efa\u4efb\u52a1",
+                "value": "CREATE_TASKS_REMOTELY"
+            },
+            {
+                "name": "telnet\u7aef\u53e3IP\u626b\u63cf",
+                "value": "TELNET_PORT_IP_SCAN"
+            },
+            {
+                "name": "cms\u6f0f\u6d1e",
+                "value": "CMS_VULNERABILITIES"
+            },
+            {
+                "name": "\u534f\u8bae\u5f02\u5e38",
+                "value": "PROTOCOL_EXCEPTION"
+            },
+            {
+                "name": "DNS\u6d2a\u6c34\u653b\u51fb",
+                "value": "DNS_FLOOD_ATTACK"
+            },
+            {
+                "name": "SYN\u6d2a\u6c34\u653b\u51fb",
+                "value": "SYN_FLOOD_ATTACK"
+            },
+            {
+                "name": "\u7f51\u9875\u7f16\u8f91\u5668\u6f0f\u6d1e",
+                "value": "WEB_EDITOR_VULNERABILITY"
+            },
+            {
+                "name": "\u5f31\u5bc6\u7801",
+                "value": "WEAK_PASSWORD"
+            },
+            {
+                "name": "\u5176\u4ed6\u534f\u8bae\u5f02\u5e38",
+                "value": "OTHER_PROTOCOL_EXCEPTIONS"
+            },
+            {
+                "name": "\u5176\u4ed6",
+                "value": "OTHERS"
+            },
+            {
+                "name": "SQL\u6ce8\u5165\u6f0f\u6d1e",
+                "value": "SQL_INJECTION_VULNERABILITY"
+            },
+            {
+                "name": "\u52a8\u6001\u57df\u540d",
+                "value": "DYNAMIC_DOMAIN_NAME"
+            },
+            {
+                "name": "\u98ce\u9669\u7aef\u53e3",
+                "value": "RISK_PORT"
+            },
+            {
+                "name": "\u4e3b\u673a\u906d\u53d7XSS\u653b\u51fb",
+                "value": "HOST_XSS_ATTACK"
+            },
+            {
+                "name": "\u8bbf\u95ee\u6076\u610f\u6587\u4ef6",
+                "value": "ACCESS_MALICIOUS_FILES"
+            },
+            {
+                "name": "ICMP\u5f02\u5e38",
+                "value": "ICMP_EXCEPTION"
+            },
+            {
+                "name": "\u76ee\u5f55\u904d\u5386\u6f0f\u6d1e",
+                "value": "DIRECTORY_TRAVERSAL_VULNERABILITY"
+            },
+            {
+                "name": "\u5176\u4ed6\u7c7b\u578b\u6f0f\u6d1e",
+                "value": "OTHER_TYPES_VULNERABILITIES"
+            },
+            {
+                "name": "ssh\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "SSH_SERVER_VULNERABILITY"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u8bbf\u95ee\u7aef\u53e3IP\u626b\u63cf",
+                "value": "REMOTACCESS_PORT_IP_SCAN"
+            },
+            {
+                "name": "mail\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "MAIL_SERVER_VULNERABILITY"
+            },
+            {
+                "name": "HTTP\u5f02\u5e38",
+                "value": "HTTP_ABNORMAL"
+            },
+            {
+                "name": "WebShell\u4e0a\u4f20",
+                "value": "WSHELL_UPLOAD"
+            },
+            {
+                "name": "\u5176\u4ed6\u5f31\u5bc6\u7801",
+                "value": "OTHER_WEAK_PASSWORDS"
+            },
+            {
+                "name": "\u6076\u610fIP\u8bf7\u6c42DNS\u670d\u52a1\u5668",
+                "value": "MALICIOUS_IP_REQUESTS"
+            },
+            {
+                "name": "\u7ba1\u7406\u8981\u6c42",
+                "value": "MANAGEMENT"
+            },
+            {
+                "name": "\u5ba2\u6237\u4e0a\u7ebf",
+                "value": "CUSTOMER_JOIN"
+            },
+            {
+                "name": "\u4f8b\u884c\u5de5\u4f5c",
+                "value": "ROUTINE_WORK"
+            },
+            {
+                "name": "\u91cd\u8981\u5de5\u4f5c",
+                "value": "IMPORTANT_WORK"
+            },
+            {
+                "name": "\u73af\u5883\u5f02\u5e38",
+                "value": "ENVIRONMENT_ABNORMAL"
+            },
+            {
+                "name": "ARS",
+                "value": "ARS"
+            },
+            {
+                "name": "\u66b4\u9732\u9762\u68b3\u7406",
+                "value": "SURFACE_SCANNING"
+            },
+            {
+                "name": "\u9493\u9c7c\u90ae\u4ef6\u6f14\u7ec3",
+                "value": "PHISHING_SIMULATION"
+            },
+            {
+                "name": "\u9ad8\u7ea7\u5a01\u80c1\u72e9\u730e",
+                "value": "ADVANCED_THREAT_HUNTING"
+            },
+            {
+                "name": "\u76f2\u70b9\u76d1\u6d4b",
+                "value": "BLINDSPOT_MONITORING"
+            },
+            {
+                "name": "\u7ea2\u961f\u68c0\u6d4b",
+                "value": "RED_TEAM_DETECTION"
+            },
+            {
+                "name": "\u5f31\u5bc6\u7801\u68b3\u7406",
+                "value": "WEAK_PASSWORD_AUDIT"
+            },
+            {
+                "name": "\u7ec4\u4ef6\u544a\u8b66\u65e5\u5fd7\u5206\u6790",
+                "value": "COMPONENT_ALERT_LOG_ANALYSIS"
+            },
+            {
+                "name": "\u8bbe\u5907\u95ee\u9898\u89e3\u51b3",
+                "value": "DEVICE_TROUBLESHOOTING"
+            },
+            {
+                "name": "\u5b9a\u5236\u9700\u6c42",
+                "value": "CUSTOMIZED_REQUIREMENTS"
+            },
+            {
+                "name": "\u6d41\u884c\u75c5\u6bd2",
+                "value": "EPIDEMIC_VIRUS"
+            },
+            {
+                "name": "0day\u901f\u9012",
+                "value": "0_DAY_EXPLOIT_EXPRESS"
+            },
+            {
+                "name": "APT\u653b\u51fb",
+                "value": "APT_ATTACK"
+            },
+            {
+                "name": "\u7d27\u6025\u6f0f\u6d1e",
+                "value": "EMERGENCY_VULNERABILITY"
+            },
+            {
+                "name": "\u9493\u9c7c\u72e9\u730e",
+                "value": "PHISHING_HUNTING"
+            },
+            {
+                "name": "\u672a\u6388\u6743\u8bbf\u95ee",
+                "value": "UNAUTHORIZED_ACCESS"
+            },
+            {
+                "name": "\u4fe1\u606f\u6cc4\u9732",
+                "value": "DATA_LEAK"
+            },
+            {
+                "name": "\u70ed\u70b9\u4e8b\u4ef6",
+                "value": "HOT_EVENT"
+            },
+            {
+                "name": "\u534a\u6708\u520a\u5b89\u5168\u901a\u544a",
+                "value": "BIWEEKLY_SECURITY_BULLETIN"
+            },
+            {
+                "name": "\u5fae\u8f6f\u8865\u4e01\u65e5\u5b89\u5168\u901a\u544a",
+                "value": "MICROSOFT_PATCH_SECURITY_BULLETIN"
+            },
+            {
+                "name": "\u5a01\u80c1\u72e9\u730e",
+                "value": "THREAT_HUNTING_SECURITY_BULLETIN"
+            },
+            {
+                "name": "0day\u6f0f\u6d1e\u5229\u7528\u653b\u51fb",
+                "value": "0_DAY_EXPLOIT"
+            },
+            {
+                "name": "\u65b0\u4e8c\u7ea7\u573a\u666f\u6d4b\u8bd5",
+                "value": "\u65b0\u4e8c\u7ea7\u573a\u666f\u6d4b\u8bd5"
+            },
+            {
+                "name": "\u65b0\u4e8c\u7ea7\u573a\u666f\u6d4b\u8bd5-bvt",
+                "value": "\u65b0\u4e8c\u7ea7\u573a\u666f\u6d4b\u8bd5-bvt"
+            },
+            {
+                "name": "\u626b\u63cf\u653b\u51fb",
+                "value": "INTERNET_SCAN"
+            },
+            {
+                "name": "\u6301\u7eed\u653b\u51fb",
+                "value": "CONTINUE_ATTACK"
+            },
+            {
+                "name": "WebShell\u4e0a\u4f20\u653b\u51fb",
+                "value": "WEBSHELL_UPLOAD_ATTACK"
+            },
+            {
+                "name": "TOPN\u653b\u51fbIP",
+                "value": "TOPN_ATTACK_IP"
+            },
+            {
+                "name": "\u7cfb\u7edf\u547d\u4ee4\u6ce8\u5165",
+                "value": "SYSTEM_COMMAND_INJECTION"
+            },
+            {
+                "name": "\u63a2\u6d4b\u653b\u51fb",
+                "value": "DETECT_ATTACK"
+            },
+            {
+                "name": "\u591a\u79cd\u6076\u610f\u653b\u51fb",
+                "value": "MULTIPLE_MALICIOUS_ATTACKS"
+            },
+            {
+                "name": "\u98ce\u9669\u8bbf\u95ee",
+                "value": "RISK_ACCESS"
+            },
+            {
+                "name": "ICMP\u96a7\u9053",
+                "value": "ICMP_TUNNEL"
+            },
+            {
+                "name": "\u4fe1\u606f\u641c\u96c6",
+                "value": "INFORMATION_GATHERING"
+            },
+            {
+                "name": "\u4e0b\u8f7d\u53ef\u7591\u6587\u4ef6",
+                "value": "DOWNLOAD_SUSPICIOUS_FILES"
+            },
+            {
+                "name": "\u871c\u7f50\u6355\u83b7\u653b\u51fb",
+                "value": "HONEYPOT_CAPTURED_ATTACK"
+            },
+            {
+                "name": "DDos\u653b\u51fb",
+                "value": "INTERNET_DDOS"
+            },
+            {
+                "name": "Dos\u653b\u51fb",
+                "value": "INTERNET_DOS"
+            },
+            {
+                "name": "HTTP\u96a7\u9053",
+                "value": "HTTP_TUNNEL"
+            },
+            {
+                "name": "\u52d2\u7d22\u9ed1\u5ba2\u653b\u51fb",
+                "value": "RANSOM_HACKER_ATTACK"
+            },
+            {
+                "name": "\u871c\u7f50\u66b4\u529b\u7834\u89e3",
+                "value": "HONEYPOT_BRUTE_FORCE"
+            },
+            {
+                "name": "\u6162\u901f\u653b\u51fb",
+                "value": "SLOW_ATTACK"
+            },
+            {
+                "name": "\u8d26\u53f7\u5b89\u5168",
+                "value": "ACCOUNT_RISK"
+            },
+            {
+                "name": "\u5e38\u89c1\u6f0f\u6d1e",
+                "value": "COMMON_VULNERABILITIES"
+            },
+            {
+                "name": "\u5f31\u53e3\u4ee4\u7c7b",
+                "value": "WEAK_PASSWORD_TYPE"
+            },
+            {
+                "name": "\u903b\u8f91\u7c7b",
+                "value": "LOGIC_TYPE"
+            },
+            {
+                "name": "\u53cd\u5e8f\u5217\u5316\u7c7b",
+                "value": "DESERIALIZATION_TYPE"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u4ee3\u7801\u6267\u884c\u7c7b",
+                "value": "REMOTE_CODE_EXECUTION_TYPE"
+            },
+            {
+                "name": "\u4fe1\u606f\u6cc4\u6f0f\u7c7b",
+                "value": "INFORMATION_LEAKAGE_TYPE"
+            },
+            {
+                "name": "\u4e92\u8054\u7f51\u9ad8\u5371\u7aef\u53e3\u66b4\u9732",
+                "value": "EXPOSURE_OF_HIGH_RISK_INTERNET_PORTS"
+            },
+            {
+                "name": "\u5f31\u53e3\u4ee4",
+                "value": "WEAK_PWD"
+            },
+            {
+                "name": "\u5f00\u653e\u654f\u611f\u7aef\u53e3",
+                "value": "OPEN_PORT"
+            },
+            {
+                "name": "\u53cd\u5411\u4ee3\u7406\u68c0\u6d4b",
+                "value": "REVERSE_PROXY"
+            },
+            {
+                "name": "\u52d2\u7d22\u7aef\u53e3",
+                "value": "RANSOM_PORT"
+            },
+            {
+                "name": "\u52d2\u7d22\u6f0f\u6d1e",
+                "value": "RANSOM_EXPLOIT"
+            },
+            {
+                "name": "POP3\u5f31\u5bc6\u7801",
+                "value": "POP3_WEAK_CIPHER"
+            },
+            {
+                "name": "\u540e\u53f0\u66b4\u9732",
+                "value": "BACKEND_EXPOSE"
+            },
+            {
+                "name": "Debug\u9519\u8bef\u4fe1\u606f",
+                "value": "DEBUG_ERROR_INFO"
+            },
+            {
+                "name": "\u7ba1\u7406\u540e\u53f0\u5f00\u653e",
+                "value": "MANAGE_BACKEND_EXPOSE"
+            },
+            {
+                "name": "WEB\u660e\u6587\u4f20\u8f93",
+                "value": "WEB_PLAINTEXT_TRANSMISSION"
+            },
+            {
+                "name": "WEB\u5f31\u5bc6\u7801",
+                "value": "WEB_WEAK_CIPHER"
+            },
+            {
+                "name": "\u4ee3\u7801\u6267\u884c\u6f0f\u6d1e",
+                "value": "CODE_EXECUTION"
+            },
+            {
+                "name": "\u767b\u5f55\u9875\u9762\u53ef\u66b4\u7834",
+                "value": "PAGE_BLASTING"
+            },
+            {
+                "name": "\u7528\u6237\u540d\u679a\u4e3e",
+                "value": "USER_NAME_ENUMERATION"
+            },
+            {
+                "name": "\u6697\u7f51\u60c5\u62a5",
+                "value": "DARK_INTELLIGENCE"
+            },
+            {
+                "name": "\u4ee3\u7801\u6cc4\u9732",
+                "value": "CODE_LEAK"
+            },
+            {
+                "name": "\u654f\u611f\u6587\u4ef6",
+                "value": "SENSITIVE_FILE"
+            },
+            {
+                "name": "\u9ed1\u4ea7\u8206\u60c5",
+                "value": "BLACK_INDUSTRY"
+            },
+            {
+                "name": "\u5458\u5de5\u4fdd\u62a4",
+                "value": "EMPLOYEE_PROTECTION"
+            },
+            {
+                "name": "\u4eff\u5192\u7f51\u7ad9",
+                "value": "FAKE_WEBSITE"
+            },
+            {
+                "name": "\u65b0\u589e\u66b4\u9732\u9762",
+                "value": "NEW_EXPOSED_SURFACE"
+            },
+            {
+                "name": "\u9ad8\u5371\u7aef\u53e3",
+                "value": "NEW_HIGH_RISK_PORT"
+            },
+            {
+                "name": "\u91cd\u8981\u7ec4\u4ef6",
+                "value": "NEW_IMPORTANT_COMPONENT"
+            },
+            {
+                "name": "\u5f02\u5e38\u4e0a\u7ebf",
+                "value": "UNUSUAL_ONLINE_EXPOSED_SURFACE"
+            },
+            {
+                "name": "SSL\u8bc1\u4e66\u4e34\u671f",
+                "value": "CERT_EXPIRY"
+            },
+            {
+                "name": "\u57df\u540d\u4e34\u671f",
+                "value": "DOMAIN_EXPIRY"
+            },
+            {
+                "name": "HTTP\u534f\u8bae\u5f02\u5e38",
+                "value": "HTTP_PROTOCOL_EXCEPTION"
+            },
+            {
+                "name": "\u5f00\u542fPUT\u3001DELETE\u5371\u9669\u65b9\u6cd5",
+                "value": "RISK_METHOD"
+            },
+            {
+                "name": "\u76ee\u5f55\u6d4f\u89c8",
+                "value": "DIRECTORY_BROWSING"
+            },
+            {
+                "name": "XSS\u6f0f\u6d1e",
+                "value": "XSS_VULNERABILITY"
+            },
+            {
+                "name": "FTP\u5f31\u53e3\u4ee4",
+                "value": "FTP_WEAK_PASSWORD"
+            },
+            {
+                "name": "SQL\u6f0f\u6d1e\u6ce8\u5165",
+                "value": "SQL_VULNERABILITY_INJECTION"
+            },
+            {
+                "name": "\u4efb\u610f\u6587\u4ef6\u4e0a\u4f20",
+                "value": "ANY_FILE_UPLOAD"
+            },
+            {
+                "name": "\u4efb\u610f\u6587\u4ef6\u4e0b\u8f7d",
+                "value": "ANY_FILE_DOWNLOAD"
+            },
+            {
+                "name": "\u672a\u6388\u6743\u6f0f\u6d1e",
+                "value": "UNAUTHORIZED_VULNERABILITY"
+            },
+            {
+                "name": "web\u540e\u53f0\u66b4\u9732",
+                "value": "WEB_BACKGROUND_EXPOSURE"
+            },
+            {
+                "name": "\u4e92\u8054\u7f51web\u7ba1\u7406\u5458\u5f31\u53e3\u4ee4",
+                "value": "INTERNET_WEB_ADMINISTRATORS_WEAK PASSWORD"
+            },
+            {
+                "name": "\u4e92\u8054\u7f51web\u666e\u901a\u7528\u6237\u5f31\u53e3\u4ee4",
+                "value": "ORDINARY_INTERNET_USERS_WEAK PASSWORD"
+            },
+            {
+                "name": "\u5185\u7f51web\u7ba1\u7406\u5458\u5f31\u53e3\u4ee4",
+                "value": "INTRANET_WEB_ADMINISTRATOR_WEAK_PASSWORD"
+            },
+            {
+                "name": "Telnet\u5f31\u53e3\u4ee4",
+                "value": "TELNET_WEAK_PASSWORD"
+            },
+            {
+                "name": "\u5185\u7f51\u666e\u901a\u7528\u6237\u5f31\u53e3\u4ee4",
+                "value": "COMMON_USERS_INTRANET_WEAK_PASSWORD"
+            },
+            {
+                "name": "ldap\u5f31\u53e3\u4ee4",
+                "value": "LDAP_WEAK_PASSWORD"
+            },
+            {
+                "name": "\u90ae\u4ef6\u5f31\u53e3\u4ee4",
+                "value": "WEAK EMAIL PASSWORD"
+            },
+            {
+                "name": "\u5bc6\u7801\u91cd\u7f6e",
+                "value": "RESET_PASSWORD"
+            },
+            {
+                "name": "\u9a8c\u8bc1\u7801\u7ed5\u8fc7",
+                "value": "VERIFICATION_CODE_BYPASS"
+            },
+            {
+                "name": "\u6c34\u5e73\u8d8a\u6743",
+                "value": "LEVEL_ULTRA_VIRES"
+            },
+            {
+                "name": "\u5782\u76f4\u8d8a\u6743",
+                "value": "VERTICAL_ULTRA_VIRES"
+            },
+            {
+                "name": "\u77ed\u4fe1\u8f70\u70b8",
+                "value": "SMS_BOMBING"
+            },
+            {
+                "name": "shiro\u53cd\u5e8f\u5217\u5316",
+                "value": "SHIRO_DESERIALIZATION"
+            },
+            {
+                "name": "fastjson\u53cd\u5e8f\u5217\u5316",
+                "value": "FASTJSON_DESERIALIZATION"
+            },
+            {
+                "name": "Jackson\u53cd\u5e8f\u5217\u5316",
+                "value": "JACKSON_DESERIALIZATION"
+            },
+            {
+                "name": "Xstream\u53cd\u5e8f\u5217\u5316",
+                "value": "XSTREAM_DESERIALIZATION"
+            },
+            {
+                "name": "Java\u53cd\u5e8f\u5217\u5316",
+                "value": "JAVA_DESERIALIZATION"
+            },
+            {
+                "name": "weblogic\u8fdc\u7a0b\u4ee3\u7801\u6267\u884c",
+                "value": "WEBLOGIC_REMOTE_CODE_EXECUTION"
+            },
+            {
+                "name": "\u901a\u8fbeOA\u8fdc\u7a0b\u4ee3\u7801\u6267\u884c",
+                "value": "TONGDA_OA_REMOTE_CODE_EXECUTION"
+            },
+            {
+                "name": "\u81f4\u8fdcOA\u8fdc\u7a0b\u4ee3\u7801\u6267\u884c",
+                "value": "ZHIYUAN_OA_REMOTE_CODE_EXECUTION"
+            },
+            {
+                "name": "Apache\u8fdc\u7a0b\u4ee3\u7801\u6267\u884c",
+                "value": "APACHE_REMOTE_CODE_EXECUTION"
+            },
+            {
+                "name": "IIS\u8fdc\u7a0b\u4ee3\u7801\u6267\u884c",
+                "value": "IIS_REMOTE_CODE_EXECUTION"
+            },
+            {
+                "name": "\u84dd\u51ccOA\u8fdc\u7a0b\u4ee3\u7801\u6267\u884c",
+                "value": "LANLING_OA_REMOTE_CODE_EXECUTION"
+            },
+            {
+                "name": "\u6cdb\u5faeOA\u8fdc\u7a0b\u4ee3\u7801\u6267\u884c",
+                "value": "FENWEI_OA_REMOTE_CODE_EXECUTION"
+            },
+            {
+                "name": "\u9519\u8bef\u4fe1\u606f\u6cc4\u9732",
+                "value": "MISINFORMATION_DISCLOSURE"
+            },
+            {
+                "name": "\u654f\u611f\u4fe1\u606f\u6cc4\u9732",
+                "value": "LEAKAGE_OF_SENSITIVE_INFORMATION"
+            },
+            {
+                "name": "\u5806\u6808\u4fe1\u606f\u6cc4\u9732",
+                "value": "STACK_INFORMATION_LEAK"
+            },
+            {
+                "name": "\u8d44\u4ea7\u5931\u9677",
+                "value": "ASSETS_LOSS"
+            },
+            {
+                "name": "\u54a8\u8be2\u95ee\u9898",
+                "value": "CONSULTANT"
+            },
+            {
+                "name": "\u4ea7\u54c1\u95ee\u9898",
+                "value": "PRODUCTION"
+            },
+            {
+                "name": "\u7b56\u7565\u8c03\u4f18",
+                "value": "STRATEGY_OPTIMIZE"
+            },
+            {
+                "name": "EDR\u7b56\u7565\u8c03\u4f18",
+                "value": "EDR_STRATEGY_OPTIMIZE"
+            },
+            {
+                "name": "SIP\u7b56\u7565\u8c03\u4f18",
+                "value": "SIP_STRATEGY_OPTIMIZE"
+            },
+            {
+                "name": "AF\u7b56\u7565\u8c03\u4f18",
+                "value": "AF_STRATEGY_OPTIMIZE"
+            },
+            {
+                "name": "TSS\u7b56\u7565\u8c03\u4f18",
+                "value": "TSS_STRATEGY_OPTIMIZE"
+            },
+            {
+                "name": "\u65e5\u5fd7\u68c0\u6d4b\u5f02\u5e38",
+                "value": "LOG_CHECK_EXCEPTION"
+            },
+            {
+                "name": "CWPP\u7b56\u7565\u8c03\u4f18",
+                "value": "CWPP_STRATEGY_OPTIMIZE"
+            },
+            {
+                "name": "\u8bbe\u5907\u68c0\u6d4b\u5f02\u5e38",
+                "value": "DEVICE_INSPECTION_ABNORMAL"
+            },
+            {
+                "name": "\u8bbe\u5907\u79bb\u7ebf",
+                "value": "DEVICE_OFFLINE"
+            },
+            {
+                "name": "\u8bbe\u5907\u4fe1\u606f\u53d8\u66f4",
+                "value": "DEVICE_INFORMATION_CHANGE"
+            },
+            {
+                "name": "MAC\u51b2\u7a81",
+                "value": "MAC_CONFLICT"
+            },
+            {
+                "name": "NTA\u7b56\u7565\u8c03\u4f18",
+                "value": "NTA_STRATEGY_OPTIMIZE"
+            },
+            {
+                "name": "wannacry",
+                "value": "WANNACRY"
+            },
+            {
+                "name": "WebShell\u901a\u4fe1",
+                "value": "WEBSHELL_COMMUNICATION"
+            },
+            {
+                "name": "\u53cd\u5e8f\u5217\u5316\u653b\u51fb",
+                "value": "DESERIALIZATION_ATTACK"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u4ee3\u7801\u6267\u884c\u6210\u529f",
+                "value": "REMOTE_CODE_EXECUTION_SUCCEED"
+            },
+            {
+                "name": "WebShell\u4e0a\u4f20\u6210\u529f",
+                "value": "WEBSHELL_UPLOAD_SUCCEED"
+            },
+            {
+                "name": "\u6f0f\u6d1e\u5229\u7528",
+                "value": "EXPLOIT_SUCCEED"
+            },
+            {
+                "name": "SQL\u6ce8\u5165",
+                "value": "SQL_INJECT_SUCCEED"
+            },
+            {
+                "name": "\u4fe1\u606f\u641c\u96c6\u6210\u529f",
+                "value": "INFORMATION_GATHERING_SUCCEED"
+            },
+            {
+                "name": "EDR\u5378\u8f7d/\u9000\u51fa",
+                "value": "EDR_UNINSTALL_OR_EXIT"
+            },
+            {
+                "name": "dnslog",
+                "value": "DNSLOG"
+            },
+            {
+                "name": "\u7f51\u9875\u7be1\u6539",
+                "value": "WEB_PAGE_TAMPERING"
+            },
+            {
+                "name": "\u7f51\u7ad9\u7be1\u6539",
+                "value": "WEBSITE_TAMPERING"
+            },
+            {
+                "name": "\u7f51\u7ad9\u65ad\u7f51",
+                "value": "WEBSITE_DISCONNECTED"
+            },
+            {
+                "name": "\u51ed\u8bc1\u7a83\u53d6",
+                "value": "CREDENTIAL_THEFT"
+            },
+            {
+                "name": "\u540e\u95e8\u5de5\u5177",
+                "value": "BACKDOOR_TOOL"
+            },
+            {
+                "name": "\u4fe1\u606f\u7be1\u6539",
+                "value": "INFORMATION_TAMPERING"
+            },
+            {
+                "name": "\u4fe1\u606f\u5047\u5192",
+                "value": "INFORMATION_COUNTERFEITING"
+            },
+            {
+                "name": "\u4fe1\u606f\u4e22\u5931",
+                "value": "INFORMATION_LOSS"
+            },
+            {
+                "name": "\u540e\u95e8\u653b\u51fb",
+                "value": "BACKDOOR_ATTACK"
+            },
+            {
+                "name": "\u5185\u5b58\u9a6c\u653b\u51fb",
+                "value": "MEMORY_TROJAN_ATTACK"
+            },
+            {
+                "name": "\u96a7\u9053\u5de5\u5177",
+                "value": "TUNNELING_TOOL"
+            },
+            {
+                "name": "\u7a83\u5bc6\u5de5\u5177",
+                "value": "DATA_EXFILTRATION_TOOL"
+            },
+            {
+                "name": "SQL\u6ce8\u5165\u6f0f\u6d1e",
+                "value": "94_1_1"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u6587\u4ef6\u5305\u542b\u6f0f\u6d1e",
+                "value": "94_1_2"
+            },
+            {
+                "name": "\u7cfb\u7edf\u547d\u4ee4\u6ce8\u5165\u6f0f\u6d1e",
+                "value": "94_1_3"
+            },
+            {
+                "name": "\u6587\u4ef6\u4e0a\u4f20\u6f0f\u6d1e",
+                "value": "94_1_4"
+            },
+            {
+                "name": "\u8de8\u7ad9\u811a\u672c(XSS)\u6f0f\u6d1e",
+                "value": "94_1_5"
+            },
+            {
+                "name": "\u76ee\u5f55\u904d\u5386\u6f0f\u6d1e",
+                "value": "94_1_6"
+            },
+            {
+                "name": "\u914d\u7f6e\u9519\u8bef\u6f0f\u6d1e",
+                "value": "94_1_7"
+            },
+            {
+                "name": "Web\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "94_1_8"
+            },
+            {
+                "name": "database\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "94_1_9"
+            },
+            {
+                "name": "FTP\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "94_1_10"
+            },
+            {
+                "name": "mail\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "94_1_11"
+            },
+            {
+                "name": "SSH\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "94_1_12"
+            },
+            {
+                "name": "vnc\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "94_1_13"
+            },
+            {
+                "name": "ldap\u670d\u52a1\u5668\u6f0f\u6d1e",
+                "value": "94_1_14"
+            },
+            {
+                "name": "\u7f51\u9875\u7f16\u8f91\u5668\u6f0f\u6d1e",
+                "value": "94_1_15"
+            },
+            {
+                "name": "cms\u6f0f\u6d1e",
+                "value": "94_1_16"
+            },
+            {
+                "name": "\u5f31\u53e3\u4ee4\u6f0f\u6d1e",
+                "value": "94_1_17"
+            },
+            {
+                "name": "\u5176\u4ed6\u7c7b\u578b\u6f0f\u6d1e",
+                "value": "94_1_999"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u767b\u5f55\u7aef\u53e3",
+                "value": "94_2_1"
+            },
+            {
+                "name": "\u6587\u4ef6\u5171\u4eab\u7aef\u53e3",
+                "value": "94_2_2"
+            },
+            {
+                "name": "\u6570\u636e\u5e93\u8bbf\u95ee\u7aef\u53e3",
+                "value": "94_2_3"
+            },
+            {
+                "name": "\u8fdc\u63a7\u5de5\u5177\u7aef\u53e3",
+                "value": "94_2_4"
+            },
+            {
+                "name": "\u77e5\u540d\u6728\u9a6c\u7aef\u53e3",
+                "value": "94_2_5"
+            },
+            {
+                "name": "\u52d2\u7d22\u7aef\u53e3",
+                "value": "94_2_6"
+            },
+            {
+                "name": "\u5176\u4ed6\u98ce\u9669\u7aef\u53e3",
+                "value": "94_2_999"
+            },
+            {
+                "name": "Jboss API\u672a\u6388\u6743",
+                "value": "94_3_1"
+            },
+            {
+                "name": "SOlr API\u672a\u6388\u6743",
+                "value": "94_3_2"
+            },
+            {
+                "name": "CouchDB\u672a\u6388\u6743",
+                "value": "94_3_4"
+            },
+            {
+                "name": "Confluence\u672a\u6388\u6743",
+                "value": "94_3_5"
+            },
+            {
+                "name": "SMTP\u672a\u6388\u6743",
+                "value": "94_3_6"
+            },
+            {
+                "name": "Jenkins\u672a\u6388\u6743",
+                "value": "94_3_7"
+            },
+            {
+                "name": "LDAP\u672a\u6388\u6743",
+                "value": "94_3_8"
+            },
+            {
+                "name": "Sonarqube\u672a\u6388\u6743",
+                "value": "94_3_9"
+            },
+            {
+                "name": "Hadoop\u672a\u6388\u6743",
+                "value": "94_3_10"
+            },
+            {
+                "name": "Redis\u672a\u6388\u6743",
+                "value": "94_3_12"
+            },
+            {
+                "name": "Jupyter\u672a\u6388\u6743",
+                "value": "94_3_13"
+            },
+            {
+                "name": "Spark\u672a\u6388\u6743",
+                "value": "94_3_14"
+            },
+            {
+                "name": "Docker\u672a\u6388\u6743",
+                "value": "94_3_16"
+            },
+            {
+                "name": "Elasticsearch\u672a\u6388\u6743",
+                "value": "94_3_17"
+            },
+            {
+                "name": "Swagger\u672a\u6388\u6743",
+                "value": "94_3_18"
+            },
+            {
+                "name": "Druid\u672a\u6388\u6743",
+                "value": "94_3_19"
+            },
+            {
+                "name": "Spring\u672a\u6388\u6743",
+                "value": "94_3_20"
+            },
+            {
+                "name": "E-cology\u672a\u6388\u6743",
+                "value": "94_3_21"
+            },
+            {
+                "name": "Dubbo\u672a\u6388\u6743",
+                "value": "94_3_22"
+            },
+            {
+                "name": "Kong admin\u672a\u6388\u6743",
+                "value": "94_3_23"
+            },
+            {
+                "name": "Cadvisor\u672a\u6388\u6743",
+                "value": "94_3_24"
+            },
+            {
+                "name": "Arcgis rest service\u672a\u6388\u6743",
+                "value": "94_3_25"
+            },
+            {
+                "name": "BsPHP\u672a\u6388\u6743",
+                "value": "94_3_26"
+            },
+            {
+                "name": "\u5176\u4ed6\u672a\u6388\u6743",
+                "value": "94_3_999"
+            },
+            {
+                "name": "FTP\u5f31\u53e3\u4ee4",
+                "value": "94_4_1"
+            },
+            {
+                "name": "LDAP\u5f31\u53e3\u4ee4",
+                "value": "94_4_2"
+            },
+            {
+                "name": "MYSQL\u5f31\u53e3\u4ee4",
+                "value": "94_4_3"
+            },
+            {
+                "name": "POP3\u5f31\u53e3\u4ee4",
+                "value": "94_4_4"
+            },
+            {
+                "name": "SMTP\u5f31\u53e3\u4ee4",
+                "value": "94_4_5"
+            },
+            {
+                "name": "Telnet\u5f31\u53e3\u4ee4",
+                "value": "94_4_6"
+            },
+            {
+                "name": "Web\u5f31\u53e3\u4ee4",
+                "value": "94_4_7"
+            },
+            {
+                "name": "IMAP\u5f31\u53e3\u4ee4",
+                "value": "94_4_8"
+            },
+            {
+                "name": "MSSQL\u5f31\u53e3\u4ee4",
+                "value": "94_4_9"
+            },
+            {
+                "name": "ORACLE\u5f31\u53e3\u4ee4",
+                "value": "94_4_10"
+            },
+            {
+                "name": "PCAnywhere\u5f31\u53e3\u4ee4",
+                "value": "94_4_11"
+            },
+            {
+                "name": "Rsync\u5f31\u53e3\u4ee4",
+                "value": "94_4_12"
+            },
+            {
+                "name": "SMB\u5f31\u53e3\u4ee4",
+                "value": "94_4_13"
+            },
+            {
+                "name": "VMWARE\u5f31\u53e3\u4ee4",
+                "value": "94_4_14"
+            },
+            {
+                "name": "VNC\u5f31\u53e3\u4ee4",
+                "value": "94_4_15"
+            },
+            {
+                "name": "SSH\u5f31\u53e3\u4ee4",
+                "value": "94_4_16"
+            },
+            {
+                "name": "RDP\u5f31\u53e3\u4ee4",
+                "value": "94_4_17"
+            },
+            {
+                "name": "ONVIF\u5f31\u53e3\u4ee4",
+                "value": "94_4_18"
+            },
+            {
+                "name": "Redis\u5f31\u53e3\u4ee4",
+                "value": "94_4_19"
+            },
+            {
+                "name": "MONOGODB\u5f31\u53e3\u4ee4",
+                "value": "94_4_20"
+            },
+            {
+                "name": "ELASTICSEARCH\u5f31\u53e3\u4ee4",
+                "value": "94_4_21"
+            },
+            {
+                "name": "Sybase\u5f31\u53e3\u4ee4",
+                "value": "94_4_22"
+            },
+            {
+                "name": "DB2\u5f31\u53e3\u4ee4",
+                "value": "94_4_23"
+            },
+            {
+                "name": "SNMP\u5f31\u53e3\u4ee4",
+                "value": "94_4_24"
+            },
+            {
+                "name": "\u5176\u4ed6\u670d\u52a1\u5f31\u53e3\u4ee4",
+                "value": "94_4_999"
+            },
+            {
+                "name": "Web\u767b\u5f55\u660e\u6587\u4f20\u8f93",
+                "value": "94_5_1"
+            },
+            {
+                "name": "\u9493\u9c7c\u7f51\u7ad9",
+                "value": "214_1"
+            },
+            {
+                "name": "\u8d4c\u535a\u7f51\u7ad9",
+                "value": "214_2"
+            },
+            {
+                "name": "\u8272\u60c5\u7f51\u7ad9",
+                "value": "214_3"
+            },
+            {
+                "name": "\u6076\u610f\u7f51\u7ad9",
+                "value": "214_4"
+            },
+            {
+                "name": "\u7aef\u53e3\u626b\u63cf",
+                "value": "201_1"
+            },
+            {
+                "name": "webshell\u626b\u63cf",
+                "value": "201_2"
+            },
+            {
+                "name": "\u7f51\u7ad9\u626b\u63cf",
+                "value": "201_3"
+            },
+            {
+                "name": "RDP\u626b\u63cf",
+                "value": "201_4_1"
+            },
+            {
+                "name": "\u6570\u636e\u5e93\u626b\u63cf",
+                "value": "201_4_2"
+            },
+            {
+                "name": "SSH\u626b\u63cf",
+                "value": "201_4_3"
+            },
+            {
+                "name": "FTP\u626b\u63cf",
+                "value": "201_4_4"
+            },
+            {
+                "name": "SMB\u626b\u63cf",
+                "value": "201_4_5"
+            },
+            {
+                "name": "Telnet\u626b\u63cf",
+                "value": "201_4_6"
+            },
+            {
+                "name": "Redis\u626b\u63cf",
+                "value": "201_4_7"
+            },
+            {
+                "name": "Memcached\u626b\u63cf",
+                "value": "201_4_8"
+            },
+            {
+                "name": "\u865a\u62df\u5316\u670d\u52a1\u626b\u63cf",
+                "value": "201_4_9"
+            },
+            {
+                "name": "\u90ae\u4ef6\u670d\u52a1\u5668\u626b\u63cf",
+                "value": "201_4_10"
+            },
+            {
+                "name": "SNMP\u670d\u52a1\u7aef\u626b\u63cf",
+                "value": "201_4_11"
+            },
+            {
+                "name": "SMTP\u670d\u52a1\u63a2\u6d4b",
+                "value": "201_4_12"
+            },
+            {
+                "name": "\u5176\u4ed6\u670d\u52a1\u63a2\u6d4b",
+                "value": "201_4_999"
+            },
+            {
+                "name": "IP\u626b\u63cf",
+                "value": "215_1"
+            },
+            {
+                "name": "ICMP\u626b\u63cf",
+                "value": "215_2"
+            },
+            {
+                "name": "ARP\u626b\u63cf",
+                "value": "215_3"
+            },
+            {
+                "name": "NetBIOS\u626b\u63cf",
+                "value": "215_4"
+            },
+            {
+                "name": "\u6587\u4ef6\u5305\u542b",
+                "value": "90_1"
+            },
+            {
+                "name": "WebShell\u4e0a\u4f20",
+                "value": "90_2"
+            },
+            {
+                "name": "\u76ee\u5f55\u904d\u5386",
+                "value": "90_3"
+            },
+            {
+                "name": "\u7f51\u9875\u6302\u9a6c",
+                "value": "90_4"
+            },
+            {
+                "name": "SQL\u6ce8\u5165",
+                "value": "90_5_1"
+            },
+            {
+                "name": "XSS\u653b\u51fb",
+                "value": "90_5_2"
+            },
+            {
+                "name": "\u7cfb\u7edf\u547d\u4ee4\u6ce8\u5165",
+                "value": "90_5_3"
+            },
+            {
+                "name": "XML\u5916\u90e8\u5b9e\u4f53\u6ce8\u5165",
+                "value": "90_5_6"
+            },
+            {
+                "name": "PHP\u4ee3\u7801\u6ce8\u5165",
+                "value": "90_5_7"
+            },
+            {
+                "name": "JAVA\u4ee3\u7801\u6ce8\u5165",
+                "value": "90_5_8"
+            },
+            {
+                "name": "Python\u4ee3\u7801\u6ce8\u5165",
+                "value": "90_5_9"
+            },
+            {
+                "name": "JavaScript\u4ee3\u7801\u6ce8\u5165",
+                "value": "90_5_10"
+            },
+            {
+                "name": "Perl\u4ee3\u7801\u6ce8\u5165",
+                "value": "90_5_13"
+            },
+            {
+                "name": ".NET\u4ee3\u7801\u6ce8\u5165",
+                "value": "90_5_14"
+            },
+            {
+                "name": "CRLF\u6ce8\u5165",
+                "value": "90_5_15"
+            },
+            {
+                "name": "LDAP\u6ce8\u5165",
+                "value": "90_5_16"
+            },
+            {
+                "name": "XPATH\u6ce8\u5165",
+                "value": "90_5_17"
+            },
+            {
+                "name": "\u5176\u4ed6\u4ee3\u7801\u6ce8\u5165",
+                "value": "90_5_999"
+            },
+            {
+                "name": "Python\u53cd\u5e8f\u5217\u5316",
+                "value": "90_6_1"
+            },
+            {
+                "name": "JAVA\u53cd\u5e8f\u5217\u5316",
+                "value": "90_6_2"
+            },
+            {
+                "name": ".Net\u53cd\u5e8f\u5217\u5316",
+                "value": "90_6_3"
+            },
+            {
+                "name": "Ruby\u53cd\u5e8f\u5217\u5316",
+                "value": "90_6_4"
+            },
+            {
+                "name": "PHP\u53cd\u5e8f\u5217\u5316",
+                "value": "90_6_5"
+            },
+            {
+                "name": "JAVAScript\u53cd\u5e8f\u5217\u5316",
+                "value": "90_6_6"
+            },
+            {
+                "name": "\u5176\u4ed6\u53cd\u5e8f\u5217\u5316",
+                "value": "90_6_999"
+            },
+            {
+                "name": "\u7cfb\u7edf\u4fe1\u606f\u6cc4\u9732",
+                "value": "90_7_1"
+            },
+            {
+                "name": "Web\u7ec4\u4ef6\u4fe1\u606f\u6cc4\u9732",
+                "value": "90_7_2"
+            },
+            {
+                "name": "\u6e90\u4ee3\u7801\u6cc4\u9732",
+                "value": "90_7_3"
+            },
+            {
+                "name": "\u914d\u7f6e\u6587\u4ef6\u6cc4\u9732",
+                "value": "90_7_4"
+            },
+            {
+                "name": "\u6570\u636e\u5e93\u6587\u4ef6\u6cc4\u9732",
+                "value": "90_7_5"
+            },
+            {
+                "name": "\u51ed\u636e\u6cc4\u9732",
+                "value": "90_7_6"
+            },
+            {
+                "name": "Web\u76ee\u5f55\u6cc4\u9732",
+                "value": "90_7_8"
+            },
+            {
+                "name": "\u5176\u5b83\u4fe1\u606f\u6cc4\u9732",
+                "value": "90_7_999"
+            },
+            {
+                "name": "\u8bf7\u6c42\u4f2a\u9020",
+                "value": "90_8_1"
+            },
+            {
+                "name": "\u81ea\u5b9a\u4e49WAF\u89c4\u5219",
+                "value": "90_9"
+            },
+            {
+                "name": "\u5176\u4ed6\u7f51\u7ad9\u653b\u51fb",
+                "value": "90_999"
+            },
+            {
+                "name": "WebShell\u7ba1\u7406\u5de5\u5177",
+                "value": "203_1_1"
+            },
+            {
+                "name": "WebShell\u8bbf\u95ee",
+                "value": "203_1_2"
+            },
+            {
+                "name": "HTTP\u96a7\u9053",
+                "value": "203_2_1"
+            },
+            {
+                "name": "DNS\u96a7\u9053",
+                "value": "203_2_2"
+            },
+            {
+                "name": "ICMP\u96a7\u9053",
+                "value": "203_2_3"
+            },
+            {
+                "name": "SSH\u96a7\u9053",
+                "value": "203_2_4"
+            },
+            {
+                "name": "\u53cd\u5f39Shell",
+                "value": "203_3_1"
+            },
+            {
+                "name": "\u670d\u52a1\u5668\u540e\u95e8",
+                "value": "203_3_2"
+            },
+            {
+                "name": "\u540e\u95e8\u8f6f\u4ef6",
+                "value": "203_3_3"
+            },
+            {
+                "name": "\u95f4\u8c0d\u8f6f\u4ef6",
+                "value": "203_3_4"
+            },
+            {
+                "name": "\u4fe1\u606f\u7a83\u53d6\u7a0b\u5e8f",
+                "value": "203_3_5"
+            },
+            {
+                "name": "\u6076\u610f\u8fdc\u63a7\u5de5\u5177",
+                "value": "203_4"
+            },
+            {
+                "name": "\u5185\u5b58\u9a6c\u653b\u51fb",
+                "value": "203_5"
+            },
+            {
+                "name": "\u649e\u5e93\u653b\u51fb",
+                "value": "204_1"
+            },
+            {
+                "name": "MYSQL\u8d26\u53f7\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_2"
+            },
+            {
+                "name": "RDP\u8d26\u53f7\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_3"
+            },
+            {
+                "name": "SSH\u8d26\u53f7\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_4"
+            },
+            {
+                "name": "SMTP\u8d26\u53f7\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_5"
+            },
+            {
+                "name": "FTP\u8d26\u53f7\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_6"
+            },
+            {
+                "name": "Smb\u8d26\u53f7\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_7"
+            },
+            {
+                "name": "IMAP\u8d26\u53f7\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_8"
+            },
+            {
+                "name": "pop3\u8d26\u53f7\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_9"
+            },
+            {
+                "name": "Ldap\u8d26\u53f7\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_10"
+            },
+            {
+                "name": "Kerberos\u8d26\u53f7\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_11"
+            },
+            {
+                "name": "Web\u8d26\u53f7\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_12"
+            },
+            {
+                "name": "Telnet\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_13"
+            },
+            {
+                "name": "SSLVPN\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_14"
+            },
+            {
+                "name": "\u5176\u5b83\u53e3\u4ee4\u66b4\u529b\u7834\u89e3",
+                "value": "204_2_999"
+            },
+            {
+                "name": "\u7aef\u53e3\u8f6c\u53d1",
+                "value": "205_1"
+            },
+            {
+                "name": "WMI\u547d\u4ee4\u6267\u884c",
+                "value": "205_2_1"
+            },
+            {
+                "name": "DCOM\u547d\u4ee4\u6267\u884c",
+                "value": "205_2_2"
+            },
+            {
+                "name": "DRS\u547d\u4ee4\u6267\u884c",
+                "value": "205_2_3"
+            },
+            {
+                "name": "WinRM\u547d\u4ee4\u6267\u884c",
+                "value": "205_2_4"
+            },
+            {
+                "name": "ATSVC\u521b\u5efa\u670d\u52a1",
+                "value": "205_3_1"
+            },
+            {
+                "name": "TSCH\u521b\u5efa\u670d\u52a1",
+                "value": "205_3_2"
+            },
+            {
+                "name": "SVCCTL\u521b\u5efa\u670d\u52a1",
+                "value": "205_3_3"
+            },
+            {
+                "name": "CouchDB\u672a\u6388\u6743\u5229\u7528",
+                "value": "205_4_1"
+            },
+            {
+                "name": "Confluence\u672a\u6388\u6743\u5229\u7528",
+                "value": "205_4_2"
+            },
+            {
+                "name": "Jenkins\u672a\u6388\u6743\u5229\u7528",
+                "value": "205_4_3"
+            },
+            {
+                "name": "Spark\u672a\u6388\u6743\u5229\u7528",
+                "value": "205_4_4"
+            },
+            {
+                "name": "Redis\u672a\u6388\u6743\u5229\u7528",
+                "value": "205_4_5"
+            },
+            {
+                "name": "Handoop\u672a\u6388\u6743\u5229\u7528",
+                "value": "205_4_6"
+            },
+            {
+                "name": "Docker\u672a\u6388\u6743\u5229\u7528",
+                "value": "205_4_7"
+            },
+            {
+                "name": "SMTP\u672a\u6388\u6743\u5229\u7528",
+                "value": "205_4_8"
+            },
+            {
+                "name": "Weblogic\u672a\u6388\u6743\u5229\u7528",
+                "value": "205_4_9"
+            },
+            {
+                "name": "\u5176\u4ed6\u672a\u6388\u6743\u5229\u7528",
+                "value": "205_4_999"
+            },
+            {
+                "name": "\u4f20\u9012\u54c8\u5e0c",
+                "value": "205_5_1"
+            },
+            {
+                "name": "\u4f20\u9012\u7968\u8bc1",
+                "value": "205_5_2"
+            },
+            {
+                "name": "\u6bd4\u7279\u5e01\u6b3a\u8bc8",
+                "value": "96_1_1"
+            },
+            {
+                "name": "\u4f2a\u9020\u53d1\u4ef6\u4eba",
+                "value": "96_1_2"
+            },
+            {
+                "name": "\u9493\u9c7c\u90ae\u4ef6",
+                "value": "96_1_3"
+            },
+            {
+                "name": "SMTP\u75c5\u6bd2\u90ae\u4ef6",
+                "value": "96_2_1"
+            },
+            {
+                "name": "POP3\u75c5\u6bd2\u90ae\u4ef6",
+                "value": "96_2_2"
+            },
+            {
+                "name": "IMAP\u75c5\u6bd2\u90ae\u4ef6",
+                "value": "96_2_3"
+            },
+            {
+                "name": "\u5176\u4ed6\u75c5\u6bd2\u90ae\u4ef6",
+                "value": "96_2_999"
+            },
+            {
+                "name": "\u5783\u573e\u90ae\u4ef6",
+                "value": "96_3"
+            },
+            {
+                "name": "\u5176\u4ed6\u90ae\u4ef6\u653b\u51fb",
+                "value": "96_999"
+            },
+            {
+                "name": "TCP flood",
+                "value": "10_1"
+            },
+            {
+                "name": "UDP flood",
+                "value": "10_2"
+            },
+            {
+                "name": "SYN flood",
+                "value": "10_3"
+            },
+            {
+                "name": "DNS flood",
+                "value": "10_4"
+            },
+            {
+                "name": "ICMP flood",
+                "value": "10_5"
+            },
+            {
+                "name": "ARP flood",
+                "value": "10_6"
+            },
+            {
+                "name": "\u5f02\u5e38IP\u62a5\u6587",
+                "value": "10_7"
+            },
+            {
+                "name": "\u672a\u77e5\u534f\u8baeflood",
+                "value": "10_8"
+            },
+            {
+                "name": "CC\u653b\u51fb\u9632\u62a4",
+                "value": "10_9"
+            },
+            {
+                "name": "\u5176\u4ed6dos\u653b\u51fb",
+                "value": "10_999"
+            },
+            {
+                "name": "\u5f00\u6e90\u548c\u5546\u4e1a\u5e94\u7528\u6f0f\u6d1e",
+                "value": "30_1"
+            },
+            {
+                "name": "Web\u6846\u67b6\u6f0f\u6d1e",
+                "value": "30_2"
+            },
+            {
+                "name": "Web\u4e2d\u95f4\u4ef6\u6f0f\u6d1e",
+                "value": "30_3"
+            },
+            {
+                "name": "\u5ba2\u6237\u7aef\u5e94\u7528\u6f0f\u6d1e",
+                "value": "30_4"
+            },
+            {
+                "name": "\u865a\u62df\u5316\u5e94\u7528\u6f0f\u6d1e",
+                "value": "30_5"
+            },
+            {
+                "name": "\u6570\u636e\u5e93\u6f0f\u6d1e",
+                "value": "30_6"
+            },
+            {
+                "name": "\u7cfb\u7edf\u670d\u52a1\u6f0f\u6d1e",
+                "value": "30_7"
+            },
+            {
+                "name": "\u7cfb\u7edf\u5185\u6838\u6f0f\u6d1e",
+                "value": "30_8"
+            },
+            {
+                "name": "IoT\u8bbe\u5907\u6f0f\u6d1e",
+                "value": "30_9"
+            },
+            {
+                "name": "\u81ea\u5b9a\u4e49IPS\u6f0f\u6d1e",
+                "value": "30_10"
+            },
+            {
+                "name": "\u5176\u4ed6\u6f0f\u6d1e\u653b\u51fb",
+                "value": "30_999"
+            },
+            {
+                "name": "\u626b\u63cf\u5de5\u5177",
+                "value": "208_1"
+            },
+            {
+                "name": "\u722c\u866b\u5de5\u5177",
+                "value": "208_2"
+            },
+            {
+                "name": "Empire",
+                "value": "208_3_1"
+            },
+            {
+                "name": "CobaltStrike",
+                "value": "208_3_2"
+            },
+            {
+                "name": "Metasploit",
+                "value": "208_3_3"
+            },
+            {
+                "name": "Burpsuit",
+                "value": "208_3_4"
+            },
+            {
+                "name": "SQLMap",
+                "value": "208_3_5"
+            },
+            {
+                "name": "\u540e\u95e8\u5de5\u5177",
+                "value": "208_4"
+            },
+            {
+                "name": "\u4ee3\u7406\u5de5\u5177",
+                "value": "208_5"
+            },
+            {
+                "name": "\u96a7\u9053\u5de5\u5177",
+                "value": "208_6"
+            },
+            {
+                "name": "\u5176\u4ed6\u5de5\u5177",
+                "value": "208_999"
+            },
+            {
+                "name": "\u6587\u4ef6\u5199\u5165",
+                "value": "213_1"
+            },
+            {
+                "name": "\u547d\u4ee4\u6267\u884c",
+                "value": "213_2"
+            },
+            {
+                "name": "\u5f02\u5e38\u64cd\u4f5c",
+                "value": "213_3"
+            },
+            {
+                "name": "\u6570\u636e\u7a83\u53d6",
+                "value": "213_4"
+            },
+            {
+                "name": "\u5176\u4ed6\u6570\u636e\u5e93\u653b\u51fb",
+                "value": "213_999"
+            },
+            {
+                "name": "\u4e0b\u8f7d\u6076\u610f\u6587\u4ef6",
+                "value": "40_1"
+            },
+            {
+                "name": "\u5185\u7f51\u4f20\u64ad\u75c5\u6bd2",
+                "value": "40_2"
+            },
+            {
+                "name": "\u6728\u9a6c",
+                "value": "209_1"
+            },
+            {
+                "name": "\u8815\u866b\u75c5\u6bd2",
+                "value": "209_2"
+            },
+            {
+                "name": "\u6316\u77ff\u75c5\u6bd2",
+                "value": "209_3"
+            },
+            {
+                "name": "\u52d2\u7d22",
+                "value": "209_4"
+            },
+            {
+                "name": "\u6d41\u6c13\u63a8\u5e7f\u8f6f\u4ef6",
+                "value": "209_9"
+            },
+            {
+                "name": "\u611f\u67d3\u578b\u75c5\u6bd2",
+                "value": "209_10"
+            },
+            {
+                "name": "Rootkit\u75c5\u6bd2",
+                "value": "209_11"
+            },
+            {
+                "name": "\u666e\u901a\u75c5\u6bd2",
+                "value": "209_12"
+            },
+            {
+                "name": "\u50f5\u5c38\u7f51\u7edc",
+                "value": "209_13"
+            },
+            {
+                "name": "\u5e7f\u544a\u8f6f\u4ef6",
+                "value": "209_14"
+            },
+            {
+                "name": "\u6fc0\u6d3b\u5de5\u5177",
+                "value": "209_15"
+            },
+            {
+                "name": "\u53ef\u7591\u9ed8\u8ba4\u5171\u4eab\u8bbf\u95ee",
+                "value": "212_1"
+            },
+            {
+                "name": "\u7cfb\u7edf\u4fe1\u606f\u63a2\u6d4b",
+                "value": "212_2"
+            },
+            {
+                "name": "\u53ef\u7591\u7ba1\u9053\u5229\u7528",
+                "value": "212_3"
+            },
+            {
+                "name": "\u8fdd\u89c4\u8bbf\u95ee",
+                "value": "212_4"
+            },
+            {
+                "name": "\u65b0\u589e\u670d\u52a1\u7aef\u53e3",
+                "value": "212_5"
+            },
+            {
+                "name": "\u57df\u63a7\u8bbf\u95ee\u91cf\u5f02\u5e38",
+                "value": "212_6"
+            },
+            {
+                "name": "\u6570\u636e\u64cd\u4f5c\u5f02\u5e38",
+                "value": "212_7"
+            },
+            {
+                "name": "\u5916\u53d1\u6570\u636e\u5f02\u5e38",
+                "value": "212_8_1"
+            },
+            {
+                "name": "\u4e0a\u4f20\u654f\u611f\u6587\u4ef6",
+                "value": "212_8_2"
+            },
+            {
+                "name": "\u4e0b\u8f7d\u53ef\u7591\u6587\u4ef6",
+                "value": "212_8_3"
+            },
+            {
+                "name": "\u7a00\u6709\u5730\u5740\u901a\u4fe1",
+                "value": "212_9_1"
+            },
+            {
+                "name": "\u7a00\u6709\u534f\u8bae\u901a\u4fe1",
+                "value": "212_9_2"
+            },
+            {
+                "name": "\u5927\u91cf\u4e3b\u52a8\u5916\u8054",
+                "value": "212_9_3"
+            },
+            {
+                "name": "\u8fdc\u63a7\u884c\u4e3a",
+                "value": "212_10"
+            },
+            {
+                "name": "IRC\u6d41\u91cf\u5f02\u5e38",
+                "value": "216_1"
+            },
+            {
+                "name": "HFS\u6d41\u91cf\u5f02\u5e38",
+                "value": "216_2"
+            },
+            {
+                "name": "Socks\u6d41\u91cf\u5f02\u5e38",
+                "value": "216_3"
+            },
+            {
+                "name": "Tor\u6d41\u91cf\u5f02\u5e38",
+                "value": "216_4"
+            },
+            {
+                "name": "HTTP\u6d41\u91cf\u5f02\u5e38",
+                "value": "216_6"
+            },
+            {
+                "name": "FTP\u670d\u52a1\u4fe1\u606f\u9690\u85cf",
+                "value": "216_7_1"
+            },
+            {
+                "name": "DNS\u6d41\u91cf\u5f02\u5e38",
+                "value": "216_8"
+            },
+            {
+                "name": "ICMP\u62a5\u6587\u6570\u91cf\u5f02\u5e38",
+                "value": "216_9_1"
+            },
+            {
+                "name": "\u975e\u6807\u51c6\u7aef\u53e3\u8dd1\u6807\u51c6\u534f\u8bae",
+                "value": "216_10_1"
+            },
+            {
+                "name": "\u6807\u51c6\u7aef\u53e3\u8dd1\u975e\u6807\u51c6\u534f\u8bae",
+                "value": "216_10_2"
+            },
+            {
+                "name": "TLS\u52a0\u5bc6\u5f02\u5e38",
+                "value": "216_11_1"
+            },
+            {
+                "name": "\u4e0a\u4e0b\u884c\u6d41\u91cf\u5f02\u5e38",
+                "value": "216_12"
+            },
+            {
+                "name": "\u5176\u4ed6\u6d41\u91cf\u5f02\u5e38",
+                "value": "216_999"
+            },
+            {
+                "name": "\u5f02\u5e38\u5730\u70b9\u767b\u5f55",
+                "value": "217_1"
+            },
+            {
+                "name": "\u5f02\u5e38\u65f6\u95f4\u767b\u5f55",
+                "value": "217_2"
+            },
+            {
+                "name": "\u5f02\u5e38\u65b9\u5f0f\u767b\u5f55",
+                "value": "217_3"
+            },
+            {
+                "name": "\u65b0\u8d26\u6237\u767b\u5f55",
+                "value": "217_4"
+            },
+            {
+                "name": "\u5f02\u5e38\u8bbe\u5907\u767b\u5f55",
+                "value": "217_5"
+            },
+            {
+                "name": "\u53ef\u7591\u8fdb\u7a0b\u884c\u4e3a",
+                "value": "218_1"
+            },
+            {
+                "name": "\u8fdc\u7a0b\u63a7\u5236",
+                "value": "218_2"
+            },
+            {
+                "name": "\u6a2a\u5411\u79fb\u52a8",
+                "value": "218_3"
+            },
+            {
+                "name": "\u5bb9\u5668\u8fd0\u884c\u65f6\u884c\u4e3a\u5f02\u5e38",
+                "value": "219_1"
+            },
+            {
+                "name": "\u5bb9\u5668\u6f0f\u6d1e\u5229\u7528",
+                "value": "219_2"
+            }
+        ]
+    }
+}

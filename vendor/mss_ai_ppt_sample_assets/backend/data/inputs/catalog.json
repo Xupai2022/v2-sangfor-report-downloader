@@ -1,0 +1,23 @@
+{
+  "datasets": [
+    {
+      "id": "classic_ops_dataxlsx",
+      "file": "classic_ops_dataxlsx_input.json",
+      "template_id": "mss_classic_ops",
+      "tenant_id": "tenant_classic_demo",
+      "tenant_name": "经典模板演示租户",
+      "period": "from-dataxlsx",
+      "notes": "Classic template input data driven by backend/data/data.xlsx"
+    },
+    {
+      "id": "plus_ops_dataxlsx",
+      "file": "plus_ops_dataxlsx_input.json",
+      "template_id": "mss_classic_ops_2",
+      "excel_file": "plus_data.xlsx",
+      "tenant_id": "tenant_plus_demo",
+      "tenant_name": "Plus模板演示租户",
+      "period": "from-plus-dataxlsx",
+      "notes": "Plus template input data driven by backend/data/plus_data.xlsx"
+    }
+  ]
+}

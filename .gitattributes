@@ -1,0 +1,11 @@
+# vendor/ 是上游 report-generation 的逐字快照，1:1 是它的全部价值。
+#
+# -text = 不做任何行尾转换。descriptor 是可执行的契约（source 路径、token 名），
+# 一旦被 core.autocrlf=true 的机器把 \n 改写成 \r\n，sha256 就对不上基线，
+# vendor_sync --check 会报「被改」——那是假警报，但真警报会被它淹没。
+# 更重要的是：vendor 里的文件不该因为「在哪台机器上 clone」而字节不同。
+vendor/** -text
+
+# PPTX / XLSX 本来就是二进制包，显式标出来让 git 不做 diff 尝试。
+*.pptx binary
+*.xlsx binary

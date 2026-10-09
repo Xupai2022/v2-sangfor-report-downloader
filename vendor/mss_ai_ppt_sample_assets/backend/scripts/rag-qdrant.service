@@ -1,0 +1,19 @@
+[Unit]
+Description=Qdrant Vector Database Service
+After=network.target
+
+[Service]
+Type=simple
+User=qdrant
+Group=qdrant
+WorkingDirectory=/opt/qdrant
+ExecStart=/opt/qdrant/qdrant
+Restart=always
+RestartSec=5
+Environment=QDRANT__SERVICE__HOST=0.0.0.0
+Environment=QDRANT__SERVICE__HTTP_PORT=6333
+Environment=QDRANT__STORAGE__STORAGE_PATH=/data/qdrant/storage
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
