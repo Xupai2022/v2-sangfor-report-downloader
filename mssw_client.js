@@ -10,11 +10,16 @@ const { readMsswCookieInfo } = require('./cookie_reader');
 const { encodePath } = require('./path_helper');
 const pythonCmd = require('./python_cmd');
 const workdir = require('./workdir');
+const { withRetry } = require('./mssw_retry');
 const { pagedExportMsswAssetList } = require('./mssw_asset_paged_export');
 
 const DEFAULT_MSSW_BASE_URL = normalizeBaseUrl('sitmssw.soar.sangfor.com.cn');
 // Referer 头的默认路径（与 origin 拼成 "<origin>/index.html"）
 const DEFAULT_REFERER_PATH = '/index.html';
+
+// 下载（requestBuffer）的超时。原先是硬编码 30s —— 资产表那种大 xlsx 在慢链路上
+// 30s 不够；而下载是 GET、幂等可重试，放宽不吃亏。
+const MSSW_DOWNLOAD_TIMEOUT_MS = 120000;
 
 const MSSW_CUSTOMER_STATISTIC_ENDPOINT = '/gateway/customer-mgr-service/order/v1/user/customer_statistic';
 const MSSW_INCIDENT_EXPORT_ENDPOINT = '/gateway/mss-mdr/web/api/mssw/mss-mdr/v1/incidents/export/tasks';
@@ -77,9 +82,9 @@ const MSSW_VUL_MANAGE_EXPORT_TIMEOUT_MS = 600000;
  * whitelisted_status/is_show）见 MSSW_VUL_MANAGE_KINDS 的 extraFilters。
  *
  * **时间范围不在这个常量里** —— 它由 buildMsswVulManageExportRequestBody 现算
- * （走 resolveVulManageTimeRangeMs），所以这里连 latest_time_range 这个键都不留。
+ * （走 resolveVulManageTimeRangeMs），所以这里连时间键都不留。
  * 出处：2026-10-08 曾按用户口径「不要传时间」留空数组，2026-10-09 用户改口 ——
- * 两张表都要按报告期取数，并给了两份带 latest_time_range 的抓包当作样例。
+ * 两张表都要按报告期取数，并给了两份带 latest_time_range（旧键）的抓包当作样例。
  */
 const MSSW_VUL_MANAGE_BASE_FILTERS = {
   asset_ip: { op: '=', val: '' },
@@ -200,6 +205,21 @@ const MSSW_WEAKPWD_EXPORT_CUSTOM_HEADERS = {
 };
 
 /**
+ * 报告期在 vul_manage 请求体里的写法 —— 平台把「按哪一列圈」直接编进了**键名**：
+ *   found_time_range  = 首次发现时间 ← 2026-10-10 用户给的漏洞表、弱密码表两份抓包都是它
+ *   latest_time_range = 最近发现时间 ← 2026-10-09 及更早的抓包（已废）
+ *
+ * 不按 kind 分：两张表同一天、同一套视图配置的两次抓包**一起换的**，没有分叉的证据。
+ * 与事件表改用 created_time（创建时间）、告警表改用 firstTime（首次发生时间）是同一波改动 ——
+ * 平台侧默认从「最近」挪到了「首次/创建」。
+ *
+ * ⚠️ 这不是纯改名：键名换掉 = 圈的是**另一列**。实测同一客户 13301 行漏洞里，
+ * 「最近发现时间」与「首次发现时间」有 2373 行不同，换错列会静默给出另一批数据。
+ */
+const MSSW_VUL_MANAGE_TIME_RANGE_KEY = 'found_time_range';
+const MSSW_VUL_MANAGE_TIME_RANGE_LABEL = '首次发现时间';
+
+/**
  * vul_manage 下两张表的差异清单 —— 路由用 kind（vuln / weakpwd），其余全共用。
  *
  * extraFilters 是各自独有的筛选器键：**照抄抓包、不互相补**。看着"漏了几个空数组"
@@ -250,6 +270,18 @@ const MSSW_INCIDENT_STATUS_COLUMN_ALIASES = ['处理状态', '处置情况'];
 /**
  * 事件表导出字段。导出 xlsx 的列名由平台按这些字段渲染成中文表头，
  * 因此这个清单同时决定了后续处理里出现的列名。
+ *
+ * 末尾三列（manage_status / contain_time / dispose_time）按 2026-10-10 的浏览器抓包补齐 ——
+ * 加列不影响取值层（那里按中文表头找列），但不加就与平台前端发的请求体不一致。
+ *
+ * push_status（导出后表头为「推送状态」）是**长期约定**，2026-10-12 用户口径：
+ * 平台抓包/请求体示例未必带它，但事件表导出**每份请求体都要有这一条**，
+ * 后续无论用户再给什么格式的事件表导出请求体样例，都要把这列补进去 ——
+ * 抓包里的字段清单只是起点、不是边界，push_status 是叠在上面的固定增量。
+ * 换句话说：拿新抓包对齐请求体时，**去掉 push_status 再对齐，加回来**；
+ * tmp/verify_incident_body/run_check.js 里那句逐字比对的 REFERENCE 也按这个规则维护。
+ *
+ * 只多导出一列，取值层要不要用它另说（那里按中文表头找列，不受影响）。
  */
 const MSSW_INCIDENT_EXPORT_FIELDS = [
   'severity', 'name', 'company_name', 'host_ip', 'end_time',
@@ -257,7 +289,8 @@ const MSSW_INCIDENT_EXPORT_FIELDS = [
   'incident_id', 'host_group_names', 'dev_source_name',
   'incident_threat_class', 'incident_threat_type', 'src_ip', 'dst_ip', 'ioc',
   'service_manager_name', 'service_group_name', 'checkout_time', 'start_time',
-  'status_note', 'finished_time', 'gpt_result', 'gpt_sub_result'
+  'status_note', 'finished_time', 'gpt_result', 'gpt_sub_result',
+  'manage_status', 'contain_time', 'dispose_time', 'push_status'
 ];
 
 function normalizeBaseUrl(value) {
@@ -401,7 +434,43 @@ function buildMsswAssetExportHeaders(cookieInfo, platform, companyId) {
   });
 }
 
-async function requestJson(url, { headers, body, timeout }) {
+/**
+ * 调用点给的重试策略 -> 归一化。
+ *
+ * onTimeout 的默认值取决于方法：超时意味着请求**可能已被服务端受理**，非幂等的 POST
+ * （建导出任务）重试会变成建两个任务，所以默认只有 GET 重试；幂等的查询（事件/告警轮询）
+ * 与下载由调用点显式打开。
+ *
+ * attempts 只在调用点给了值时才带上 —— 让 mssw_retry 的默认值保持唯一一处定义。
+ */
+function normalizeRetryPolicy(retry, method) {
+  const cfg = retry || {};
+  const policy = {
+    baseDelayMs: cfg.baseDelayMs,
+    onTimeout: cfg.onTimeout == null ? method === 'GET' : cfg.onTimeout,
+    logger: cfg.logger,
+    label: cfg.label
+  };
+  if (cfg.attempts != null) {
+    policy.attempts = cfg.attempts;
+  }
+  return policy;
+}
+
+/**
+ * 带重试的 JSON 请求：五张表的所有请求都从这一门过，重试逻辑不必在 export* 里再写一遍。
+ *
+ * 判据（哪些错该重试）全在 mssw_retry；这里只负责把「方法 + 调用点策略」翻成策略，
+ * 以及给日志一个能定位到接口的 label。
+ */
+async function requestJson(url, { headers, body, timeout, retry }) {
+  const method = body === undefined ? 'GET' : 'POST';
+  const policy = normalizeRetryPolicy(retry, method);
+  policy.label = policy.label || `MSSW 请求 ${method} ${new URL(url).pathname}`;
+  return withRetry(() => requestJsonOnce(url, { headers, body, timeout }), policy);
+}
+
+async function requestJsonOnce(url, { headers, body, timeout }) {
   const parsedUrl = new URL(url);
   const transport = parsedUrl.protocol === 'http:' ? http : https;
   const timeoutMs = Number(timeout) || 30000;
@@ -429,10 +498,10 @@ async function requestJson(url, { headers, body, timeout }) {
           // → 轮询 → 下载 → 资产分页…），只说「403」等于什么都没说 ——
           // 2026-09-24 那次 9451 就是卡在这里，日志里看不出是哪一个请求。
           // 只给 path，不给 query（`?` 后面的东西没必要进日志）。
-          reject(new Error(
+          reject(Object.assign(new Error(
             `MSSW 请求失败 ${res.statusCode} [${method} ${parsedUrl.pathname}]: `
             + `${typeof parsed === 'string' ? parsed : JSON.stringify(parsed).slice(0, 500)}`
-          ));
+          ), { statusCode: res.statusCode }));
           return;
         }
 
@@ -442,7 +511,9 @@ async function requestJson(url, { headers, body, timeout }) {
 
     req.on('error', reject);
     req.setTimeout(timeoutMs, () => {
-      req.destroy(new Error(`MSSW 请求超时: ${url}`));
+      // timedOut 与「连接层 errno」分开：超时的请求可能已被服务端受理，
+      // 该不该重试要看调用点（非幂等的建任务不重试），判据见 mssw_retry。
+      req.destroy(Object.assign(new Error(`MSSW 请求超时: ${url}`), { timedOut: true }));
     });
 
     if (body !== undefined) {
@@ -452,9 +523,16 @@ async function requestJson(url, { headers, body, timeout }) {
   });
 }
 
-async function requestBuffer(url, { headers }) {
+async function requestBuffer(url, { headers, timeout, retry }) {
+  const policy = normalizeRetryPolicy(retry, 'GET');
+  policy.label = policy.label || `MSSW 下载 ${new URL(url).pathname}`;
+  return withRetry(() => requestBufferOnce(url, { headers, timeout }), policy);
+}
+
+async function requestBufferOnce(url, { headers, timeout }) {
   const parsedUrl = new URL(url);
   const transport = parsedUrl.protocol === 'http:' ? http : https;
+  const timeoutMs = Number(timeout) || MSSW_DOWNLOAD_TIMEOUT_MS;
 
   return new Promise((resolve, reject) => {
     const req = transport.request(parsedUrl, {
@@ -468,10 +546,10 @@ async function requestBuffer(url, { headers }) {
         const buffer = Buffer.concat(chunks);
         if (res.statusCode < 200 || res.statusCode >= 300) {
           // 同 requestJson：带上接口，否则「下载失败 403」无法定位是哪一份表。
-          reject(new Error(
+          reject(Object.assign(new Error(
             `MSSW 下载失败 ${res.statusCode} [GET ${parsedUrl.pathname}]: `
             + `${buffer.toString('utf8').slice(0, 500)}`
-          ));
+          ), { statusCode: res.statusCode }));
           return;
         }
         resolve({
@@ -483,8 +561,9 @@ async function requestBuffer(url, { headers }) {
     });
 
     req.on('error', reject);
-    req.setTimeout(30000, () => {
-      req.destroy(new Error(`MSSW 下载请求超时: ${url}`));
+    req.setTimeout(timeoutMs, () => {
+      // 下载是 GET、幂等，超时重试安全（downloadMssw*File 都开了 onTimeout）。
+      req.destroy(Object.assign(new Error(`MSSW 下载请求超时: ${url}`), { timedOut: true }));
     });
     req.end();
   });
@@ -520,7 +599,8 @@ function parseLocalDate(value, endOfDay = false) {
 /**
  * 把 CLI 的本地日期范围解析成 epoch 秒。
  *
- * 注意调用方对单位的需求不同：事件表要毫秒（自己 *1000），告警表直接吃秒。
+ * 注意调用方对单位的需求不同：事件表与漏洞/弱密码表要毫秒（走 resolveMsswTimeRangeMs），
+ * 告警表直接吃秒。
  */
 function resolveMsswTimeRange(options = {}, label = '事件导出') {
   const begin = parseLocalDate(options.begin || options.start, false);
@@ -534,37 +614,75 @@ function resolveMsswTimeRange(options = {}, label = '事件导出') {
   return { begin, end };
 }
 
-function buildMsswIncidentExportRequestBody({ begin, end, companyId, fields }) {
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * 同样的日期范围，解析成 epoch **毫秒**的本地日界闭区间：
+ * 起 = 起日 00:00:00.000，止 = 止日 23:59:59.999。
+ *
+ * 事件表（filters.created_time）与漏洞/弱密码表（found_time_range）共用这一处定义 ——
+ * 两份抓包的收尾都是 ...599999，各算一遍迟早算岔。
+ *
+ * 为什么不复用 resolveMsswTimeRange 的返回值：那个函数取的是当天 23:59:59.**999**，
+ * 再 floor 到秒就变成 23:59:59.000，收尾正好差 999ms。校验仍然复用它（格式 + 起止先后），
+ * 毫秒值从原始日期重算。
+ */
+function resolveMsswTimeRangeMs(options = {}, label = '事件导出') {
+  const rawStart = options.begin || options.start;
+  resolveMsswTimeRange(options, label);
+
+  const startMs = parseLocalDate(rawStart, false) * 1000;
+  const endMs = parseLocalDate(options.end, false) * 1000 + MS_PER_DAY - 1;
+  return [startMs, endMs];
+}
+
+/**
+ * 事件表导出请求体。
+ *
+ * 时间键是 `filters.created_time`（创建时间），毫秒闭区间，**不是 `end_time`**。
+ * 2026-10-10 用户给的浏览器抓包改用「创建时间」圈报告期；此前按「结束时间」过滤，
+ * 回来的行集跟报告期对不上 —— 而且不报错，只有对着时间列核才发现。
+ *
+ * 其余键也照那份抓包逐字对齐：`export_company_range: 'all'` + `selection` 取代了早先的
+ * format / is_all / my_customer / event_id_list 那套（早先那套能跑通，但平台前端已经这么发了，
+ * 跟着平台的写法走，下次抓包比对时不会再出现一堆无谓的差异）。
+ *
+ * @param {number[]} timeRangeMs filters.created_time，见 resolveMsswTimeRangeMs；必填 ——
+ *   这个接口没有「全量」模式，缺时间范围要当场报错而不是发一份不圈时间的请求。
+ */
+function buildMsswIncidentExportRequestBody({ timeRangeMs, companyId, fields }) {
+  if (!Array.isArray(timeRangeMs) || timeRangeMs.length !== 2) {
+    throw new Error('事件表导出请求体缺少 created_time 时间范围（[-startMs, -endMs]）');
+  }
+
   return {
     filters: {
-      end_time: [begin, end],
+      created_time: timeRangeMs,
       customer_type: 'single_customer',
       company_ids: [String(companyId)]
     },
     sorts: [{ field: 'sla_deadline', order: 'asc' }],
     export_mode: 'custom',
-    format: 'xlsx',
-    is_all: 0,
-    my_customer: 0,
-    event_id_list: [],
+    export_company_range: 'all',
+    selection: { is_select_all: 0, select_incident_ids: [] },
     fields: fields || MSSW_INCIDENT_EXPORT_FIELDS
   };
 }
 
 /** 创建导出任务，返回 task_id。 */
 async function triggerMsswIncidentExport(cookieInfo, platform, options) {
-  const { begin, end } = resolveMsswTimeRange(options);
+  const timeRangeMs = options.timeRangeMs || resolveMsswTimeRangeMs(options);
   const companyId = options.customerId || options.companyId || '';
   const headers = buildMsswExportHeaders(cookieInfo, platform, companyId);
   const url = platformEndpoint(platform, MSSW_INCIDENT_EXPORT_ENDPOINT);
 
   const response = await requestJson(url, {
     headers,
-    body: JSON.stringify(buildMsswIncidentExportRequestBody({
-      begin: begin * 1000,
-      end: end * 1000,
-      companyId
-    }))
+    body: JSON.stringify(buildMsswIncidentExportRequestBody({ timeRangeMs, companyId })),
+    // 建任务是**非幂等**的：只重试连接层错（请求根本没出去），超时不重试 ——
+    // 超时多半是服务端已在处理，再发一次就是两个任务。attempts 给 2 而不是 3，
+    // 因为失败在这里基本只有「网络不通」一种，多打一次就够判断了。
+    retry: { logger: options.logger, label: '事件导出建任务', attempts: 2, onTimeout: false }
   });
 
   const code = response && response.code;
@@ -589,7 +707,9 @@ async function pollMsswIncidentExportTask(cookieInfo, platform, taskId, options 
   while (Date.now() - startedAt <= timeoutMs) {
     const response = await requestJson(url, {
       headers,
-      body: JSON.stringify({ task_id: taskId })
+      body: JSON.stringify({ task_id: taskId }),
+      // 查询是幂等的，超时也重试：轮询中途抖一下不该让前面等的时间全白费。
+      retry: { logger, label: '事件导出轮询', onTimeout: true }
     });
 
     const code = response && response.code;
@@ -625,7 +745,7 @@ async function pollMsswIncidentExportTask(cookieInfo, platform, taskId, options 
  * 与其它接口不同，下载要按二进制读，且必须去掉 x-requested-with / content-type，
  * 否则会被网关当作普通 XHR 拦掉。
  */
-async function downloadMsswIncidentFile(cookieInfo, platform, taskId, downloadDir, filename, companyId) {
+async function downloadMsswIncidentFile(cookieInfo, platform, taskId, downloadDir, filename, companyId, { logger } = {}) {
   const downloadUrl = platformEndpoint(platform, `${MSSW_INCIDENT_EXPORT_ENDPOINT}/${taskId}/download`);
 
   const headers = buildMsswHeaders(cookieInfo.cookieString, platform, {
@@ -635,7 +755,11 @@ async function downloadMsswIncidentFile(cookieInfo, platform, taskId, downloadDi
   delete headers['x-requested-with'];
   delete headers['content-type'];
 
-  const downloaded = await requestBuffer(downloadUrl, { headers });
+  // 下载是 GET、幂等：默认 3 次、超时也重试（onTimeout 的默认值见 normalizeRetryPolicy）。
+  const downloaded = await requestBuffer(downloadUrl, {
+    headers,
+    retry: { logger, label: '事件表下载' }
+  });
   const targetPath = path.join(downloadDir, filename);
   await fsp.mkdir(downloadDir, { recursive: true });
   await fsp.writeFile(targetPath, downloaded.buffer);
@@ -740,14 +864,16 @@ function buildMsswAlertHeaders(cookieInfo, platform, companyId, overrides = {}) 
 /**
  * 告警表导出请求体。
  *
- * 时间给 epoch **秒**（不是毫秒），timeField 固定 lastTime（最近发生时间）。
+ * 时间给 epoch **秒**（不是毫秒），闭区间 [起日 00:00:00, 止日 23:59:59]；
+ * timeField 是 **firstTime**（首次发生时间）—— 2026-10-10 用户给的浏览器抓包用的是这一列，
+ * 此前写的是 lastTime（最近发生时间）：值算得一样，但**圈的是另一批行**，而接口照样 code=0。
  */
 function buildMsswAlertExportRequestBody({ begin, end }) {
   return {
     globalCondition: {
       branchIds: [],
       time: {
-        timeField: 'lastTime',
+        timeField: 'firstTime',
         begin: { type: 'absolute', value: begin },
         end: { type: 'absolute', value: end }
       }
@@ -800,7 +926,12 @@ async function triggerMsswAlertExport(cookieInfo, platform, companyId, options =
   const body = JSON.stringify(buildMsswAlertExportRequestBody({ begin, end }));
   headers['content-length'] = String(Buffer.byteLength(body));
 
-  const response = await requestJson(url, { headers, body });
+  // 非幂等的建任务：同事件表，只重试连接层错，超时不重试。
+  const response = await requestJson(url, {
+    headers,
+    body,
+    retry: { logger: options.logger, label: '告警导出建任务', attempts: 2, onTimeout: false }
+  });
 
   const code = response && response.code;
   if (code !== 0 && code !== '0') {
@@ -833,7 +964,12 @@ async function pollMsswAlertExportTask(cookieInfo, platform, companyId, taskId, 
   let lastStatus = '';
 
   while (Date.now() - startedAt <= timeoutMs) {
-    const response = await requestJson(url, { headers, body });
+    // 查询幂等，超时也重试（600s 的轮询窗口里抖一下不该从头再来）。
+    const response = await requestJson(url, {
+      headers,
+      body,
+      retry: { logger, label: '告警导出轮询', onTimeout: true }
+    });
 
     const code = response && response.code;
     if (code !== 0 && code !== '0') {
@@ -891,7 +1027,7 @@ function parseContentDispositionFilename(disposition, fallback) {
  * 不是带文件名的下载 URL；真实文件名要从 content-disposition 里取。
  * 同样是二进制读，且要去掉 x-requested-with / content-type。
  */
-async function downloadMsswAlertFile(cookieInfo, platform, companyId, resultPath, downloadDir) {
+async function downloadMsswAlertFile(cookieInfo, platform, companyId, resultPath, downloadDir, { logger } = {}) {
   const downloadUrl = resultPath.startsWith('http')
     ? resultPath
     : platformEndpoint(platform, `${resultPath.startsWith('/') ? '' : '/'}${resultPath}`);
@@ -902,7 +1038,10 @@ async function downloadMsswAlertFile(cookieInfo, platform, companyId, resultPath
   delete headers['x-requested-with'];
   delete headers['content-type'];
 
-  const downloaded = await requestBuffer(downloadUrl, { headers });
+  const downloaded = await requestBuffer(downloadUrl, {
+    headers,
+    retry: { logger, label: '告警表下载' }
+  });
   const filename = parseContentDispositionFilename(
     downloaded.headers && (downloaded.headers['content-disposition'] || downloaded.headers['Content-Disposition']),
     `安全告警-${Date.now()}.xlsx`
@@ -947,7 +1086,7 @@ async function exportMsswAlertList(options) {
   logInfo(logger, `告警导出完成，共 ${polled.total} 条`);
 
   const downloadDir = options.downloadDir || path.dirname(cookieInfo.resolvedPath);
-  const downloaded = await downloadMsswAlertFile(cookieInfo, platform, companyId, polled.resultPath, downloadDir);
+  const downloaded = await downloadMsswAlertFile(cookieInfo, platform, companyId, polled.resultPath, downloadDir, { logger });
   logInfo(logger, `告警表已下载: ${downloaded.filePath}`);
 
   return {
@@ -1116,13 +1255,20 @@ function resolveAssetExportFilename(response) {
  * 触发资产导出，返回文件名。同步接口：没有 task_id，也没有轮询。
  * 超时给到 10 分钟（资产导出是同步接口，大客户可能跑很久）。
  */
-async function triggerMsswAssetExport(cookieInfo, platform, companyId, exportFields, ids = [], searchType = 'current') {
+async function triggerMsswAssetExport(cookieInfo, platform, companyId, exportFields, ids = [], searchType = 'current', { logger } = {}) {
   const headers = buildMsswAssetExportHeaders(cookieInfo, platform, companyId);
   const url = platformEndpoint(platform, MSSW_ASSET_EXPORT_ENDPOINT);
   const body = JSON.stringify(buildMsswAssetExportRequestBody(exportFields, ids, searchType));
   headers['content-length'] = String(Buffer.byteLength(body));
 
-  const response = await requestJson(url, { headers, body, timeout: 600000 });
+  // 同步导出，非幂等（服务端会生成一份文件）：只重试连接层错，600s 超时不重试 ——
+  // 超时正是「导出跑不完」的信号，再等 10 分钟没有意义（往下一段会切分页兜底）。
+  const response = await requestJson(url, {
+    headers,
+    body,
+    timeout: 600000,
+    retry: { logger, label: `资产导出(${searchType})`, attempts: 2, onTimeout: false }
+  });
 
   const code = response && response.code;
   const apiSuccess = response && (response.success === true || response.success === 'true');
@@ -1134,7 +1280,7 @@ async function triggerMsswAssetExport(cookieInfo, platform, companyId, exportFie
 }
 
 /** 下载资产文件：GET + query string，无请求体；这里换掉 content-type。 */
-async function downloadMsswAssetFile(cookieInfo, platform, companyId, filename, downloadDir) {
+async function downloadMsswAssetFile(cookieInfo, platform, companyId, filename, downloadDir, { logger } = {}) {
   const downloadUrl = platformEndpoint(platform, `${MSSW_ASSET_DOWNLOAD_ENDPOINT}?file=${encodeURIComponent(filename)}`);
 
   const headers = buildMsswHeaders(cookieInfo.cookieString, platform, {
@@ -1143,7 +1289,10 @@ async function downloadMsswAssetFile(cookieInfo, platform, companyId, filename, 
   });
   delete headers['content-type'];
 
-  const downloaded = await requestBuffer(downloadUrl, { headers });
+  const downloaded = await requestBuffer(downloadUrl, {
+    headers,
+    retry: { logger, label: '资产表下载' }
+  });
   const targetPath = path.join(downloadDir, filename);
   await fsp.mkdir(downloadDir, { recursive: true });
   await fsp.writeFile(targetPath, downloaded.buffer);
@@ -1248,21 +1397,21 @@ async function exportMsswAssetList(options) {
   } else {
     try {
       // 第 1 步：资产台账（search_type=current）
-      const currentExport = await triggerMsswAssetExport(cookieInfo, platform, companyId, exportFields, assetIds, 'current');
+      const currentExport = await triggerMsswAssetExport(cookieInfo, platform, companyId, exportFields, assetIds, 'current', { logger });
       currentFilename = resolveAssetExportFilename(currentExport);
       if (!currentFilename) {
         throw new Error(`MSSW 资产台账导出接口返回缺少文件名: ${JSON.stringify(currentExport).slice(0, 500)}`);
       }
-      const currentDownloaded = await downloadMsswAssetFile(cookieInfo, platform, companyId, currentFilename, downloadDir);
+      const currentDownloaded = await downloadMsswAssetFile(cookieInfo, platform, companyId, currentFilename, downloadDir, { logger });
       currentFilePath = currentDownloaded.filePath;
       logInfo(logger, `资产台账已下载: ${currentFilePath}`);
 
       // 第 2 步：待审核资产（search_type=wait_approve），失败不阻断主流程
       try {
-        const waitApproveExport = await triggerMsswAssetExport(cookieInfo, platform, companyId, exportFields, assetIds, 'wait_approve');
+        const waitApproveExport = await triggerMsswAssetExport(cookieInfo, platform, companyId, exportFields, assetIds, 'wait_approve', { logger });
         const waitApproveFilename = resolveAssetExportFilename(waitApproveExport);
         if (waitApproveFilename) {
-          const waitApproveDownloaded = await downloadMsswAssetFile(cookieInfo, platform, companyId, waitApproveFilename, downloadDir);
+          const waitApproveDownloaded = await downloadMsswAssetFile(cookieInfo, platform, companyId, waitApproveFilename, downloadDir, { logger });
           waitApproveFilePath = waitApproveDownloaded.filePath;
           logInfo(logger, `待审核资产已下载: ${waitApproveFilePath}`);
         } else {
@@ -1431,7 +1580,7 @@ async function exportMsswIncidentList(options) {
   }
 
   const downloadDir = options.downloadDir || path.dirname(cookieInfo.resolvedPath);
-  const downloaded = await downloadMsswIncidentFile(cookieInfo, platform, taskId, downloadDir, fileName, companyId);
+  const downloaded = await downloadMsswIncidentFile(cookieInfo, platform, taskId, downloadDir, fileName, companyId, { logger });
   logInfo(logger, `事件表已下载: ${downloaded.filePath}`);
 
   // 误报过滤：直接读事件表自带的「处置状态」列，删除标记为「已忽略」的行。
@@ -1467,17 +1616,17 @@ async function exportMsswIncidentList(options) {
 // ---------------------------------------------------------------------------
 
 /**
- * vul_manage 的 latest_time_range：epoch **毫秒**、本地日界，与事件表/告警表那份
- * --start/--end 同一个口径（起 = 起始日 00:00:00.000，止 = 结束日 23:59:59.999）。
+ * vul_manage 的 timeRange 值：epoch **毫秒**，起 = 起始日 00:00:00.000，
+ * 止 = 结束日 23:59:59.**000**（截到秒）。
  *
- * 为什么不用 resolveMsswTimeRange 的返回值：那个函数把时间戳压到**秒**，收尾会变成
- * 23:59:59.000。而本接口吃毫秒 —— 用户 2026-10-09 给的漏洞表抓包里收尾是 1791561599999
- * （.999，浏览器侧 Math 出来的原始值），另一个弱密码抓包是 ...599000（被截过的）。
- * 差这 999ms 正常情况碰不到，但既然毫秒粒度不花代价，就照平台真正的写法来。
- * 校验仍然复用 resolveMsswTimeRange（格式 + 起止先后），只是不要它那个秒值。
+ * 收尾故意不吃 resolveMsswTimeRangeMs 那个 .999：2026-10-10 的漏洞表抓包收尾是
+ * 1791647999000（.000），2026-10-09 那份漏洞表抓包是 ...599999（.999），同日另给的弱密码
+ * 抓包又是 ...599000 —— 平台自己的前端就一会儿一个样（Math 取的原始值 vs 被截过的）。
+ * 差这 999ms 正常情况碰不到（平台的时间列是秒/日粒度），按最新抓包来，也就是 .000。
+ * 事件表那侧相反：它的抓包是 .999，走 resolveMsswTimeRangeMs。
  *
- * 过滤的列是**「最近发现时间」**：实测单日窗口返回的行全落该日。不是「首次发现时间」——
- * 某客户 13301 行里这两列有 2373 行不同，选错列差别很大。
+ * 「按哪一列圈」由 MSSW_VUL_MANAGE_TIME_RANGE_KEY 决定（两张表都是「首次发现时间」）——
+ * 这不是本函数的事，但它决定了这个区间的语义，改键时必须一起来看。
  *
  * 两个日期一个都没传时回落空数组 = 全量导出（`--type vuln` 单独跑仍可用）；
  * 只传一个则照常报错，因为那多半是手滑，静默退全量会得出另一份数据。
@@ -1486,23 +1635,24 @@ async function exportMsswIncidentList(options) {
  * @returns {number[]} [startMs, endMs]，或空数组表示不过滤
  */
 function resolveVulManageTimeRangeMs(options = {}) {
-  const rawStart = options.begin || options.start;
-  const rawEnd = options.end;
-  if (!rawStart && !rawEnd) return [];
+  const hasStart = Boolean(options.begin || options.start);
+  const hasEnd = Boolean(options.end);
+  if (!hasStart && !hasEnd) return [];
 
-  resolveMsswTimeRange(options, '漏洞表/弱密码表导出');
-
-  const startMs = parseLocalDate(rawStart, false) * 1000;
-  const endMs = parseLocalDate(rawEnd, false) * 1000 + 24 * 60 * 60 * 1000 - 1;
-  return [startMs, endMs];
+  // begin 是起日 00:00:00、end 是止日 23:59:59 的**秒**值（见 resolveMsswTimeRange），
+  // 各自 *1000 正好落在毫秒的日界上。
+  const { begin, end } = resolveMsswTimeRange(options, '漏洞表/弱密码表导出');
+  return [begin * 1000, end * 1000];
 }
 
 /**
  * vul_manage 导出请求体。两个 kind 共用一套筛选器，只有差异部分按 kind 取。
  *
  * @param {'vuln'|'weakpwd'} kind
- * @param {number[]} [timeRangeMs] latest_time_range，见 resolveVulManageTimeRangeMs；
- *   缺省空数组 = 全量。键显式放在第一个，与平台抓包里的位置一致。
+ * @param {number[]} [timeRangeMs] 报告期区间，见 resolveVulManageTimeRangeMs；缺省空数组 =
+ *   全量。**键名由平台定**（MSSW_VUL_MANAGE_TIME_RANGE_KEY = found_time_range）——
+ *   平台把「按哪一列圈」编进了键名本身，两张表共用这一个键。
+ *   键显式放在第一个，与平台抓包里的位置一致（弱密码抓包里它在中间，键序无语义，无所谓）。
  */
 function buildMsswVulManageExportRequestBody(kind, timeRangeMs = []) {
   const spec = MSSW_VUL_MANAGE_KINDS[kind];
@@ -1511,7 +1661,7 @@ function buildMsswVulManageExportRequestBody(kind, timeRangeMs = []) {
   }
 
   return {
-    latest_time_range: timeRangeMs,
+    [MSSW_VUL_MANAGE_TIME_RANGE_KEY]: timeRangeMs,
     ...MSSW_VUL_MANAGE_BASE_FILTERS,
     ...spec.extraFilters,
     data_type: [spec.dataType],
@@ -1544,7 +1694,10 @@ async function triggerMsswVulManageExport(cookieInfo, platform, companyId, kind,
   const response = await requestJson(url, {
     headers,
     body: JSON.stringify(buildMsswVulManageExportRequestBody(kind, timeRangeMs)),
-    timeout: Number(options.exportTimeoutMs || MSSW_VUL_MANAGE_EXPORT_TIMEOUT_MS)
+    timeout: Number(options.exportTimeoutMs || MSSW_VUL_MANAGE_EXPORT_TIMEOUT_MS),
+    // 同步阻塞导出，非幂等。超时不重试：这个接口的超时上限就是 600s，
+    // 「超时 = 平台卡住」，再等 10 分钟只会把一次失败拖成 20 分钟。
+    retry: { logger: options.logger, label: `${spec.label}导出`, attempts: 2, onTimeout: false }
   });
 
   const code = response && response.code;
@@ -1594,7 +1747,7 @@ function resolveVulManageFilename(disposition, fallback) {
  * 与其他两份"按文件名换文件"的接口一致：二进制读，且必须去掉
  * x-requested-with / content-type，否则会被网关当作普通 XHR 拦掉。
  */
-async function downloadMsswVulManageFile(cookieInfo, platform, companyId, fileName, downloadDir) {
+async function downloadMsswVulManageFile(cookieInfo, platform, companyId, fileName, downloadDir, { logger } = {}) {
   const downloadUrl = platformEndpoint(
     platform,
     `${MSSW_VUL_MANAGE_DOWNLOAD_ENDPOINT}?file=${encodeURIComponent(fileName)}`
@@ -1607,7 +1760,12 @@ async function downloadMsswVulManageFile(cookieInfo, platform, companyId, fileNa
   delete headers['x-requested-with'];
   delete headers['content-type'];
 
-  const downloaded = await requestBuffer(downloadUrl, { headers });
+  // 本函数漏洞表 / 弱密码表共用，拿不到 spec.label，日志里就写「脆弱性表」——
+  // 两张表的中文名本来也是同一个（见 resolveVulManageFilename 上方注释）。
+  const downloaded = await requestBuffer(downloadUrl, {
+    headers,
+    retry: { logger, label: '脆弱性表下载' }
+  });
   const disposition = downloaded.headers
     && (downloaded.headers['content-disposition'] || downloaded.headers['Content-Disposition']);
   const filename = resolveVulManageFilename(disposition, fileName);
@@ -1644,8 +1802,8 @@ async function exportMsswVulManageList(options, kind) {
   // 时间范围先算再打日志：这两张表最慢能跑 40s，日志里得写清这一次到底按哪一段取的数。
   const timeRangeMs = resolveVulManageTimeRangeMs(options);
   logInfo(logger, timeRangeMs.length
-    ? `导出 MSSW ${spec.label}: ${options.start || options.begin} ~ ${options.end}（按「最近发现时间」过滤）`
-    : `导出 MSSW ${spec.label}: 全量（未传 --start/--end，latest_time_range 留空）`);
+    ? `导出 MSSW ${spec.label}: ${options.start || options.begin} ~ ${options.end}（按「${MSSW_VUL_MANAGE_TIME_RANGE_LABEL}」过滤）`
+    : `导出 MSSW ${spec.label}: 全量（未传 --start/--end，${MSSW_VUL_MANAGE_TIME_RANGE_KEY} 留空）`);
 
   const cookieInfo = await readMsswCookieInfo(options.msswCookiePath);
   const platform = resolvePlatform(options);
@@ -1660,7 +1818,7 @@ async function exportMsswVulManageList(options, kind) {
   logInfo(logger, `${spec.label}导出完成: ${fileName}（服务端耗时 ${Math.round((Date.now() - startedAt) / 1000)}s）`);
 
   const downloadDir = options.downloadDir || path.dirname(cookieInfo.resolvedPath);
-  const downloaded = await downloadMsswVulManageFile(cookieInfo, platform, companyId, fileName, downloadDir);
+  const downloaded = await downloadMsswVulManageFile(cookieInfo, platform, companyId, fileName, downloadDir, { logger });
   logInfo(logger, `${spec.label}已下载: ${downloaded.filePath}`);
 
   // 误报过滤：落盘后读表自带的「处置状态」列，删掉「处置完成（误报）」的行。
@@ -1716,8 +1874,12 @@ module.exports = {
   platformEndpoint,
   parseLocalDate,
   resolveMsswTimeRange,
+  resolveMsswTimeRangeMs,
   buildMsswHeaders,
   buildMsswExportHeaders,
+  // HTTP 层：给 scripts/verify_retry.js 对着本地 server 打，验重试的接线
+  requestJson,
+  requestBuffer,
   buildMsswIncidentExportRequestBody,
   triggerMsswIncidentExport,
   pollMsswIncidentExportTask,
@@ -1751,6 +1913,8 @@ module.exports = {
   MSSW_VUL_MANAGE_DOWNLOAD_ENDPOINT,
   MSSW_VUL_MANAGE_EXPORT_TIMEOUT_MS,
   MSSW_VUL_MANAGE_BASE_FILTERS,
+  MSSW_VUL_MANAGE_TIME_RANGE_KEY,
+  MSSW_VUL_MANAGE_TIME_RANGE_LABEL,
   MSSW_VUL_MANAGE_KINDS,
   resolveVulManageTimeRangeMs,
   buildMsswVulManageExportRequestBody,

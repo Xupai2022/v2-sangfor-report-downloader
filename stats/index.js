@@ -4,10 +4,10 @@
  * 单元格登记表汇总入口。
  *
  * CELLS 是「数据统计」sheet 全部取值逻辑的唯一真相源（CELL_REGISTRY.md R14）。
- * 地址集合必须等于 r1_baseline.js 的 429 个地址 —— 由 scripts/cell.js --check 校验（K1）。
+ * 地址集合必须等于 r1_baseline.js 的 428 个地址 —— 由 scripts/cell.js --check 校验（K1）。
  *
  * 域划分见 CELL_REGISTRY.md §8 F1。
- * M1 阶段全部走 _baseline（过渡态：426 条 unresolved + 3 个已转正的报告参数格）；
+ * M1 阶段全部走 _baseline（过渡态：366 条 unresolved + 62 格已转正的参数格与统计格）；
  * M1.5 按数据源拆成域文件后，把下面 GROUPS 里的 _baseline 替换成域文件即可。
  */
 

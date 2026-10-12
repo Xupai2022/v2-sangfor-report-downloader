@@ -12,6 +12,7 @@
     "cell:check": "node scripts/cell.js --check",
     "cell:todo": "node scripts/cell.js --unresolved",
     "verify:write": "node scripts/verify_write_layer.js",
+    "verify:retry": "node scripts/verify_retry.js",
     "ppt:generate": "node pipeline.js generate",
     "ppt:rewrite": "node pipeline.js rewrite",
     "ppt:slides": "node pipeline.js list-slides --template mss_classic_ops_2 --rewritable",

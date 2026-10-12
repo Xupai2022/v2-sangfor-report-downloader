@@ -42,17 +42,25 @@ function isBlankValue(raw) {
 /**
  * 频次排行。
  *
+ * 空表、以及「有行但一个有效值都没有」（整列都是空 / 占位符 `-`）都返回
+ * `{ items: [], total: 0 }` —— **没有定性就是没有定性**，那是数据结论，不是缺数：
+ * 名次槽位本来就该是空的，调用方（labelAt / countAt / shareAt）对每个名次都回空串，
+ * 与「名次不够 7 个」时的落法合成同一条（用户口径 2026-10-10：
+ * 下载一定发生，某份表 0 行是正常的；整列读不出值同理）。
+ *
+ * 唯一会抛的还是**列名对不上**：有行数据、却没有任何一行带这个键 = 平台改了列名，
+ * 那时按「没有定性」算等于拿一份没读到的数据当没有（C5/R10）。
+ *
  * @param {Array} rows 总表行对象（键是表头文字，CELL_REGISTRY.md §7）
  * @param {string} column 承载定性 / 标签的表头文字
  * @param {string} tableLabel 表的中文名，只用于错误信息
- * @returns {{items: Array<{label: string, count: number}>, total: number}|undefined}
- *   total 是全部有效值的出现总次数，即占比的分母
- *   （全量，不是前几名之和）。表为空、或所有行都没有值时返回 undefined
- *   —— 缺数不静默（R10 / H6），由写层记入错误列表，绝不填 0。
+ * @returns {{items: Array<{label: string, count: number}>, total: number}}
+ *   total 是全部有效值的出现总次数，即占比的分母（全量，不是前几名之和）。
+ *   表为空 / 没有有效值时 items 为空数组、total 为 0
  * @throws {Error} 有行数据、但没有任何一行带 column 这个键（= 猜错列名）
  */
 function buildRanking(rows, column, tableLabel) {
-  if (!Array.isArray(rows) || rows.length === 0) return undefined;
+  if (!Array.isArray(rows) || rows.length === 0) return { items: [], total: 0 };
 
   const hasColumn = rows.some(
     (row) => row && Object.prototype.hasOwnProperty.call(row, column)
@@ -78,7 +86,7 @@ function buildRanking(rows, column, tableLabel) {
     else tally.set(label, { label, count: 1, firstSeenAt: index });
   });
 
-  if (total === 0) return undefined; // 有行但一个值都没有，同样是取不到数
+  if (total === 0) return { items: [], total: 0 }; // 有行、但一个有效值都没有：没有定性就是没有
 
   const items = [...tally.values()]
     .sort((left, right) => right.count - left.count || left.firstSeenAt - right.firstSeenAt)
@@ -90,8 +98,9 @@ function buildRanking(rows, column, tableLabel) {
 /**
  * 名次 rank（从 0 起）的名称 / 数量 / 占比。
  *
- * 名次不存在（表里的值不足 rank+1 种）时返回**空串** —— 那个槽位本来就是空的，
- * 不是取不到数。表本身没读到 / 没有值时才由调用方回 undefined（R10 / H6）。
+ * 名次不存在（表里的值不足 rank+1 种 —— 包括表为空、整列都读不出值这两种）时返回
+ * **空串** —— 那个槽位本来就是空的，不是取不到数。本文件不再有「取不到数」这条路：
+ * 会抛的只有 buildRanking 里那条**列名对不上**。
  */
 function labelAt(ranking, rank) {
   const item = ranking.items[rank];

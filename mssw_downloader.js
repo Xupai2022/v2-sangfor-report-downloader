@@ -53,15 +53,20 @@ const {
   exportMsswAssetList,
   exportMsswAlertList,
   exportMsswVulnList,
-  exportMsswWeakPwdList
+  exportMsswWeakPwdList,
+  MSSW_VUL_MANAGE_TIME_RANGE_LABEL
 } = require('./mssw_client');
 const { buildReport, generateReportFileName } = require('./report_writer');
 const { parseTableRows } = require('./mssw_parser');
+const { runPreprocess } = require('./mssw_preprocess');
 const { createContext } = require('./stats/context');
-const { QUALIFICATION_COLUMN } = require('./stats/metrics/alarm');
-const { BUSINESS_COLUMN, IP_COLUMN: ASSET_IP_COLUMN } = require('./stats/metrics/asset');
-const { RISK_ASSET_COLUMN: VULN_RISK_ASSET_COLUMN, THREAT_TAG_COLUMN } = require('./stats/metrics/vuln');
-const { RISK_ASSET_COLUMN: WEAKPWD_RISK_ASSET_COLUMN } = require('./stats/metrics/weakpwd');
+const { ALARM_TABLE_COLUMNS } = require('./stats/metrics/alarm');
+const { BUSINESS_COLUMN, IP_COLUMN: ASSET_IP_COLUMN, IMPORTANT_LEVEL_COLUMN,
+        PRIMARY_ASSET_TYPE_COLUMN } = require('./stats/metrics/asset');
+const { RISK_ASSET_COLUMN: VULN_RISK_ASSET_COLUMN, THREAT_TAG_COLUMN,
+        DISPOSITION_COLUMN: VULN_DISPOSITION_COLUMN } = require('./stats/metrics/vuln');
+const { RISK_ASSET_COLUMN: WEAKPWD_RISK_ASSET_COLUMN,
+        WEAKPWD_TABLE_COLUMNS } = require('./stats/metrics/weakpwd');
 const { EVENT_TABLE_COLUMNS } = require('./stats/metrics/event');
 const { MAX_CORE_SYSTEMS } = require('./stats/metrics/core_system');
 // 失败分类（code / 退出码 / hint）与 pipeline.js 共用同一份，见 mssw_errors.js 头注。
@@ -97,7 +102,8 @@ const TYPE_LABELS = {
 };
 
 // 缺少 --start/--end 就**不能跑**的表。事件表/告警表在此列：它们没有"全量"这个模式。
-// 漏洞表/弱密码表不在此列 —— 它们按 --start/--end 取数（过滤「最近发现时间」），
+// 漏洞表/弱密码表不在此列 —— 它们按 --start/--end 取数（两张表都按「首次发现时间」圈，
+// 见 mssw_client 的 MSSW_VUL_MANAGE_TIME_RANGE_LABEL），
 // 但日期是可选的：不传就退化成全量导出（见 mssw_client 的 resolveVulManageTimeRangeMs）。
 const TIME_RANGE_TYPES = new Set(['event', 'alarm']);
 
@@ -124,9 +130,13 @@ Options:
   --cookie-path <path>      mssw cookie 文件或目录；**传了即本地模式**（不传则走集群）
   --type <names>            只下指定表，逗号分隔：asset | alarm | event | vuln | weakpwd
                             （别名 incident / alert / 告警 / 漏洞 / 弱密码；默认下载全部）
-  --business-systems <a,b,c> 核心业务系统名，最多 3 个（逗号/顿号/分号均可，中英文不限）。
-                            按顺序填「数据统计」的 D3/D4/D5，对应的风险总数填 D7/D8/D9。
-                            不传则这 6 格一个都不写（模板原样保留）。
+  --business-systems <a,b,c> 核心业务系统名，**可选**，最多 3 个（逗号/顿号/分号均可，中英文不限）。
+                            按顺序填「数据统计」的 D3/D4/D5，各自的风险总数填 D7/D8/D9，
+                            D6 是那三个数之和（三个槽位一个不落地加：少传一个，那一格就是 0，
+                            所以只传 2 个时 D6 就是这 2 个之和）。
+                            不传/少传：名字格 D3/D4/D5 空着的那几个不写值并记入错误列表；
+                            **算出来的**格（D6:D9 / G6/H6/I6 / G10）按 0 落值（用户口径 2026-10-12）。
+                            D10/D12/D15/D17/D11 不受它影响。
   --mssw-base-url <origin>  MSSW 入口。裸域名默认加 https://（集群内网入口带端口，
                             用完整 origin，如 http://mssw-inner.sangfor.com.cn:30001）
   --mssw-host-header <h>    Host 头覆盖。默认本地=域名、集群=统一 Host 头；
@@ -269,7 +279,11 @@ async function downloadTable(type, ctx) {
       result,
       summary: [
         `告警表: ${result.filePath}`,
-        `  共 ${result.total} 条（原样落盘，未加工）`
+        // 下载层不动这份表（事件/漏洞/弱密码表在这一层删行，告警表不删）。
+        // 「主机IP」原样落盘 —— 那个值本来就带括号说明（`172.101.226.10(未归类组)`），
+        // 报告 sheet 上也原样保留（2026-10-12 起合并阶段不再剥掉它）。
+        // 取值层比对时会自己剥（stats/metrics/rows.js 的 normalizeIp），不受影响。
+        `  共 ${result.total} 条（下载原样落盘）`
       ].join('\n')
     };
   }
@@ -286,7 +300,7 @@ async function downloadTable(type, ctx) {
       summary: [
         `${TYPE_LABELS[type]}: ${result.filePath}`,
         options.start && options.end
-          ? `  时间范围 ${options.start} ~ ${options.end}（按「最近发现时间」过滤）`
+          ? `  时间范围 ${options.start} ~ ${options.end}（按「${MSSW_VUL_MANAGE_TIME_RANGE_LABEL}」过滤）`
           : '  全量导出（未传 --start/--end，不传时间范围）',
         `  删除处置状态为「处置完成（误报）」的行 ${result.removedRows} 条（${result.totalBefore} -> ${result.totalAfter}）`
       ].join('\n')
@@ -314,90 +328,150 @@ async function downloadTable(type, ctx) {
 /**
  * 告警表中间件 -> 内存行对象数组（MIGRATION.md R9 的 parse*，实现在 mssw_parser.js）。
  *
- * 读**列白名单**而不是整表：告警导出没有行数上限，63 列全量回传会撞 execFile 的
- * maxBuffer。列名从 stats/metrics/alarm.js 取常量，不在这里写字面量 —— 写死的话
- * 平台改列名时，取值层和读取层会各说各话。
+ * 读**列白名单**而不是整表：告警导出没有行数上限（实测一份 10 万行），整表回传会撞
+ * execFile 的 maxBuffer。列名从 stats/metrics/alarm.js 取常量（ALARM_TABLE_COLUMNS：
+ * 告警定性 + GPT研判结论 + 主机IP），不在这里写字面量 —— 写死的话，平台改列名时，
+ * 取值层和读取层会各说各话。
  *
- * 读失败**不吞**（R10 缺数不静默）：拿个空数组糊过去的话，14 格会安安静静地留空，
- * 看起来与「这段时间真的没有告警」一模一样。
+ * 读失败**不吞**（R10 缺数不静默）：拿个空数组糊过去的话，14 格告警定性与 G5/G6/H6/I6
+ * 会安安静静地留空，看起来与「这段时间真的没有告警」一模一样。
  *
  * 列名对不上**不算读失败**：照常返回行对象（那些行一个都不带这个键），取值层的
- * hasOwnProperty 防线会抛错、把那 14 格记进错误列表。这里只负责把这个事实吼出来。
+ * hasOwnProperty 防线会抛错、把用它的格子记进错误列表。这里只负责把这个事实吼出来。
  */
 async function readAlarmRows(filePath, logger) {
-  const parsed = await parseTableRows(filePath, { columns: [QUALIFICATION_COLUMN] });
+  const parsed = await parseTableRows(filePath, { columns: ALARM_TABLE_COLUMNS });
 
   if (parsed.missingColumns.length) {
     const preview = parsed.header.slice(0, 12).join('、');
     logger(
       `[数据统计] ⚠️ 告警表里没有「${parsed.missingColumns.join('、')}」列，`
-      + `C133:I134 会留空并记进错误列表。表头共 ${parsed.header.length} 列: `
+      + `用它的格子（「告警定性」-> C133:I134，「GPT研判结论」/「主机IP」-> G5 / G6/H6/I6）`
+      + `会留空并记进错误列表。表头共 ${parsed.header.length} 列: `
       + `${preview}${parsed.header.length > 12 ? ' …' : ''}`
     );
   }
   if (parsed.unnamedColumns) {
     logger(`[数据统计] 告警表有 ${parsed.unnamedColumns} 列表头为空（这些列无法按列名读取）`);
   }
-  logger(`[数据统计] 告警表读入 ${parsed.rowCount} 行，取「${QUALIFICATION_COLUMN}」列`);
+  logger(`[数据统计] 告警表读入 ${parsed.rowCount} 行，`
+    + `取「${ALARM_TABLE_COLUMNS.join('、')}」列`);
   return parsed.rows;
 }
 
 /**
- * 「核心业务系统」那 6 格（D3/D4/D5 + D7/D8/D9）里，靠总表算的三段要读的三份表。
+ * 资产表：**无条件**读一次（与告警表同理，不受 --business-systems 影响）。
  *
- * 与 readAlarmRows 同一套路（列白名单 + 读失败不吞 + 缺列吼一声），所以共用
- * readStatisticsRows：这几份表动辄上万行（漏洞表实测 13301 行），列白名单不是可选项。
- * 列名一律从 stats/metrics/*.js 取常量，不在这里写字面量。
+ * 读它的是四处，需求列不同，所以取并集一次读完：
+ *   · D11「管理员弱口令数量」要「重要级别」（挑出核心资产）+「IP地址」（核心资产集合）
+ *   · 核心业务系统的风险总数（D6:D9）要「所属业务」「IP地址」（业务归属 -> IP）
+ *   · G16「业务系统数量」只要「所属业务」这一列（数出现过多少种不同的内容 ——
+ *     不读 IP、也不看 --business-systems，所以它缺「IP地址」列也照算）
+ *   · G17「服务器资产数量」/ G18「PC资产数量」只要「资产类型(一级)」这一列
+ *     （数整格精确等于「服务器」/「终端」的行数 —— 同样不读 IP、不看 --business-systems）
  *
- * 事件表**不在这份清单里** —— 事件定性那 21 格（C135:I137）无论如何都要读它，所以
- * 它由 EVENT_TABLE_SPEC **无条件**读一次（见下），D7:D9 那段就从同一次读取里取。
- * 放进这个循环会让它在传了 --business-systems 时被读第二遍，而第二遍的列白名单里
- * 没有「GPT定性标签」，后读到的行对象会把先读到的盖掉、21 格全炸。
- *
- * 为空表示「这一份表这次没下到」（比如 --type asset）。**资产表**缺席时 D7:D9 走缺数路径
- * （业务归属 -> IP 的钥匙没了，一个值都不写并记进错误列表）；另外三份缺席时那一格
- * **把这一段当 0 加进去**、其余段照算（用户口径），代价是报告上看不出少算了一段，
- * 所以拼 ctx 时会给这三份各留一行警告日志。
+ * 它同时是前两处的**钥匙**：没有资产表，D11 与 D6:D9 都做不出「-> IP 集合」这一步。
+ * 不过这一点不必在这里额外照顾：下载一定发生，某份表真没下到时 buildReport 会直接报
+ * 「缺少 资产表 的下载结果」、整份报告不出（scripts/build_report.py），流程走不到取值层；
+ * 到了取值层的表一律是「有行」或「0 行」，两种都只是「这台/这批资产存在与否」，按 0 算。
  */
-const CORE_SYSTEM_TABLES = [
-  {
-    type: 'asset',
-    field: 'assetRows',
-    label: '资产表',
-    columns: [BUSINESS_COLUMN, ASSET_IP_COLUMN],
-    affected: 'D7:D9'
-  },
-  {
-    type: 'vuln',
-    field: 'vulnRows',
-    label: '漏洞表',
-    columns: [VULN_RISK_ASSET_COLUMN, THREAT_TAG_COLUMN],
-    affected: 'D7:D9'
-  },
-  {
-    type: 'weakpwd',
-    field: 'weakPwdRows',
-    label: '弱密码表',
-    columns: [WEAKPWD_RISK_ASSET_COLUMN],
-    affected: 'D7:D9'
-  }
-];
+const ASSET_TABLE_SPEC = {
+  type: 'asset',
+  field: 'assetRows',
+  label: '资产表',
+  columns: [BUSINESS_COLUMN, ASSET_IP_COLUMN, IMPORTANT_LEVEL_COLUMN, PRIMARY_ASSET_TYPE_COLUMN],
+  affected: 'D6:D9、D11、G16、G17、G18'
+};
+
+/**
+ * 弱密码表：**无条件**读一次（D11 / D16 要它，与 --business-systems 无关）。
+ *
+ * 读它的是三处，需求列不同，所以取并集一次读完：
+ *   · D11「管理员弱口令数量」第一段（核心资产上的弱密码行数）—— 要「风险资产」
+ *   · 核心业务系统的风险总数（D6:D9）里「弱密码风险」那一段 —— 要「风险资产」
+ *   · D16「已处置弱口令数量」第一段（全表「处置状态」=「处置完成」的行数）—— 要「处置状态」
+ *
+ * 表为空（0 行）时给空数组即可：三处都是「那一段行数为 0」
+ * （口径见 stats/metrics/weakpwd.js 与 admin_weakpwd.js / disposed_weakpwd.js），
+ * 0 是结论、不是缺数。报告期窗口里一条弱密码都没有，本来就会下到空表。
+ */
+const WEAKPWD_TABLE_SPEC = {
+  type: 'weakpwd',
+  field: 'weakPwdRows',
+  label: '弱密码表',
+  columns: WEAKPWD_TABLE_COLUMNS,
+  affected: 'D6:D9、D11、D16'
+};
+
+/**
+ * 漏洞表：**无条件**读一次（与告警表、事件表同理，不受 --business-systems 影响）。
+ *
+ * 读它的是四处，需求列不同，所以取并集一次读完：
+ *   · D10「高危可利用漏洞数」要「威胁标签」（全表含「高可利用」的行数）
+ *   · D12「最新漏洞影响资产数」要「威胁标签」+「风险资产」（全表含「热点漏洞」、
+ *     再按「风险资产」去重数台）—— D17 是 D12 的 alias，自己不读表，列白名单里没有它的份
+ *   · D15「已修复漏洞数」要「处置状态」（全表里精确等于「处置完成」的行数）
+ *   · 核心业务系统的风险总数（D6:D9）那一段要「威胁标签」+「风险资产」（按 IP 圈定）
+ *
+ * 表为空（0 行）就是「这段时间一条漏洞都没有」-> 给空数组：D10 / D12 / D15 各归总成 0
+ * （0 是结论，不是缺数）。取值层已经不再区分「整份没下到」与「下到了、0 行」——
+ * 前者在 scripts/build_report.py 就被拦下了，整份报告不出。
+ */
+const VULN_TABLE_SPEC = {
+  type: 'vuln',
+  field: 'vulnRows',
+  label: '漏洞表',
+  columns: [THREAT_TAG_COLUMN, VULN_RISK_ASSET_COLUMN, VULN_DISPOSITION_COLUMN],
+  affected: 'D6:D9、D10、D12、D15（+ D17，走 D12 的 alias）'
+};
 
 /**
  * 事件表：**无条件**读一次（与告警表同理，不受 --business-systems 影响）。
  *
- * 读它的是两处，需求列不同，所以取并集一次读完（EVENT_TABLE_COLUMNS 就在
+ * 读它的是八处，需求列不同，所以取并集一次读完（EVENT_TABLE_COLUMNS 就在
  * stats/metrics/event.js 里定义，列名只写一遍）：
  *   · 事件定性 21 格（C135:I137）要「GPT定性标签」
- *   · 核心业务系统的风险总数（D7:D9）要「影响资产」「安全事件二级分类」
+ *   · D11「管理员弱口令数量」第二段要「影响资产」「安全事件二级分类」
+ *   · 核心业务系统的风险总数（D6:D9）要「影响资产」「安全事件二级分类」
+ *   · G8「处置安全事件总数」要「处置状态」
+ *   · G9「事件平均响应时长」要「处置状态」「推送状态」「响应时长」—— 第一列是选行
+ *     （**复用 G8 那批行**，见 stats/metrics/event.js 的 disposedEventRows），
+ *     「推送状态」是平台导出的真实列，「响应时长」是预处理追加的（同 G7 的那一批）。
+ *   · D16「已处置弱口令数量」第二段要「安全事件二级分类」「处置状态」
+ *     （与 D11 读同一列、与 G8 读同一列，但条件不同：分类含「弱口令」且状态恰为
+ *     「处置完成」—— 各格的判据各写在各自的 metrics 函数里）
+ *   · G7「威胁平均遏制时间」要「GPT研判结论」「遏制时长」—— 前者是选行（与 G5 同一句话），
+ *     后者算均值。⚠️「遏制时长」**不是平台导出的列**，是上面那步表格预处理追加到下载件上的
+ *     （见 runInner 里 runPreprocess 的位置）—— 所以读事件表必须发生在预处理之后。
+ *     平台改了那两个时间源列的名时，预处理凑不齐就**不追加**时长列，
+ *     G7 报「找不到『遏制时长』列」不写值 + 记错误（旧版 25 列导出就是这样）。
+ *   · G10「核心系统事件数量」要「影响资产」（「精确落在」系统 IP 并集里的行数，
+ *     与 D6:D9 那一段同一列、另一套数法）
+ *
+ * 表为空（0 行）时给空数组即可：绝大多数格子都是「那一段 / 那一格是 0 或空串」
+ * （口径见 stats/metrics/event.js），0 / 空串是结论、不是缺数。
  */
 const EVENT_TABLE_SPEC = {
   type: 'event',
   field: 'eventRows',
   label: '事件表',
   columns: EVENT_TABLE_COLUMNS,
-  affected: 'C135:I137、D7:D9'
+  affected: 'C135:I137、D6:D9、D11、D16、G7、G8、G9、G10'
 };
+
+/**
+ * 无条件读的四份总表（数据统计那个 sheet 的输入）。
+ *
+ * 这四份都与 --business-systems 无关，各自还有别的格子要读 —— 所以不再有「传了系统名
+ * 才读」的分支：那种按需读盘会让 D10/D12/D15/D11 这几格在没传系统名时拿到空 ctx。
+ * 列白名单一律从 stats/metrics/*.js 取常量，不在这里写字面量。
+ */
+const STATISTICS_TABLE_SPECS = [
+  ASSET_TABLE_SPEC,
+  VULN_TABLE_SPEC,
+  WEAKPWD_TABLE_SPEC,
+  EVENT_TABLE_SPEC
+];
 
 /**
  * 一份总表中间件 -> 内存行对象数组（MIGRATION.md R9 的 parse*，实现在 mssw_parser.js）。
@@ -558,6 +632,46 @@ async function runInner(options) {
   logger('');
   logger(summaryLines.join('\n'));
 
+  // ----- 表格预处理：事件表那三步，跑在解析之前（用户口径 2026-10-12）-----
+  //
+  // **取值层必须在预处理之后** —— ctx 里的事件表行对象要能直接读到预处理追加出来的列
+  // （眼下是「内网外网资产」与「遏制时长 / 识别时长 / 处置时长 / 响应时长」）。
+  // 所以这几步只能在 parse* 之前落到下载件上（原地改写，见 mssw_preprocess.js）：
+  //
+  //   下载 -> 事件表预处理（这里）-> parse* -> createContext -> buildReport
+  //
+  // 表格预处理**只有这一处**：从前还有一步「告警表『主机IP』剥括号」留在合并报告时跑，
+  // 2026-10-12 已删除 —— 它不影响任何取值，却让同一个「主机IP」在仓库里有两个形态。
+  // 现在交付物里与取值层看到的都是平台原样（带括号那种）。
+  //
+  // 只下事件表（`--type event`）时跳过：没有资产表就建不出「IP -> 内网/外网」映射，
+  // 而且那种跑法本来就凑不齐六份表 —— 后面 build_report.py 的「缺少 X 的下载结果」
+  // 会照常报（R10 缺数不静默）。
+  //
+  // 预处理自己抛错（文件被占用、工作簿里已有同名 sheet）**不吞**：那是真异常，
+  // 而且它一失败，取值层读到的就与「平台改了列名」长得一模一样。
+  logger('');
+  logger('===== 表格预处理（下载之后、解析之前）=====');
+  let preprocess = null;
+  if (results.event && results.asset) {
+    const summary = await runPreprocess({
+      assetPath: results.asset.filePath,
+      eventPath: results.event.filePath
+    });
+    for (const line of summary.logs) logger(line);
+    preprocess = {
+      ran: summary.ran,
+      asset: summary.asset,
+      event: summary.event,
+      duration: summary.duration
+    };
+  } else {
+    const absent = ['event', 'asset']
+      .filter((type) => !results[type])
+      .map((type) => TYPE_LABELS[type]);
+    logger(`[预处理] 跳过（这次没下到 ${absent.join('、')}）：取值层读到的表与下载件一致`);
+  }
+
   // 合并成一份报告：每个 sheet 一个表，数据统计 sheet 保持模板原样
   logger('');
   logger('===== 合并报告 =====');
@@ -567,73 +681,106 @@ async function runInner(options) {
 
   // 「数据统计」取值层的输入。C1 规定 ctx 只能由 createContext 拼装。
   //
-  // 接上 ctx 后「数据统计」会写四类格子：
+  // 接上 ctx 后「数据统计」会写几类格子：
   //   · 3 个报告参数格（J1/L1/M1 = 客户名 / 报告期起 / 报告期止）—— CLI 入参直传，
   //     不依赖任何总表，与 M1 时一样现在就能写
   //   · 14 格告警定性统计（C133:I134：前七名的名称 + 占比）—— 要读告警表，
   //     所以先把下载到的中间件读成行对象喂进 ctx（R9 的 parse*，见 mssw_parser.js）
   //   · 21 格事件定性统计（C135:I137：前七名的名称 / 数量 / 占比）—— 要读事件表，
   //     同一条 parse* 链（列白名单不同，见 EVENT_TABLE_SPEC）
-  //   · 6 格核心业务系统（D3/D4/D5 系统名 + D7/D8/D9 风险总数）—— 名字取 CLI 的
-  //     --business-systems；风险总数要读资产表（业务归属 -> IP）与漏洞表/弱密码表/事件表
-  // 其余 385 格是 mode:'unresolved'，接不接 ctx 都不写（H7）。
+  //   · 7 格核心业务系统（D3/D4/D5 系统名 + D6 安全风险总数 + D7/D8/D9 各自的风险总数）——
+  //     名字取 CLI 的 --business-systems；每个系统的风险总数要读资产表（业务归属 -> IP）
+  //     与漏洞表/弱密码表/事件表，D6 是那三格之和（三个槽位一个不落地加）
+  //     ⚠️ --business-systems 是**可选**的：没给到哪个槽位，那一槽的数字格就是 0
+  //     （不记账），只有写系统名的 D3/D4/D5 空着才不写值 + 记错误（用户口径 2026-10-12）
+  //   · 1 格高危可利用漏洞数（D10）—— 要读漏洞表（整张表，见 VULN_TABLE_SPEC），
+  //     与 --business-systems 无关
+  //   · 1 格最新漏洞影响资产数（D12）—— 同一份漏洞表，含「热点漏洞」的漏洞再按
+  //     「风险资产」去重数台，同样与 --business-systems 无关
+  //   · 1 格已修复漏洞数（D15）—— 还是同一份漏洞表，「处置状态」精确等于「处置完成」
+  //     的行数，同样与 --business-systems 无关
+  //   · 1 格受影响的最新漏洞数（D17）—— **同 D12**（投喂口径「值 = D12」），走 alias：
+  //     它不读任何表，D12 算出什么它就跟什么（D12 是 0 它就是 0），所以这里没有它自己的读盘
+  //   · 1 格管理员弱口令数量（D11）—— 要读资产表（重要级别 = 核心 -> 核心资产集合）
+  //     与弱密码表 / 事件表，与 --business-systems 无关
+  //   · 1 格威胁告警总（G5）—— 要读告警表（「GPT研判结论」精确等于「真实攻击未成功」的
+  //     行数），与 --business-systems 无关
+  //   · 3 格核心系统威胁告警数量（G6/H6/I6）—— 要读资产表（业务归属 -> IP）与告警表
+  //     （「主机IP」落在集合里的行数），系统名与 D3/D4/D5 同取 --business-systems
+  //   · 1 格处置安全事件总数（G8）—— 还是事件表，但读的是另一列：「处置状态」整格精确
+  //     等于「已遏制 / 处置完成 / 已忽略」三者之一的行数，与 --business-systems 无关
+  //     （与那 21 格同表不同列，所以 EVENT_TABLE_SPEC 的列白名单里两列都要有）
+  //   · 1 格事件平均响应时长（G9）—— 还是事件表：在 G8 那批行之上再精确匹配
+  //     「推送状态」=「已推送」，取「响应时长」列（分钟）的非空均值 ——
+  //     「响应时长」与 G7 的「遏制时长」同一批、由上面的表格预处理追加，列白名单里要有它；
+  //     一个样本都没有时写 **0**（用户口径「没有就写0」—— 与 G7 写空串不是同一条口径）
+  //   · 1 格已处置弱口令数量（D16）—— **跨两份表、两段相加、不去重**：弱密码表里
+  //     「处置状态」精确等于「处置完成」的行数 ＋ 事件表里「安全事件二级分类」含
+  //     「弱口令」且「处置状态」精确等于「处置完成」的行数，与 --business-systems 无关
+  //   · 1 格威胁平均遏制时间（G7）—— 还是事件表：「GPT研判结论」精确等于「真实攻击未成功」
+  //     的那几行，取「遏制时长」列（分钟）的非空均值。这一列**不是平台导出的**，
+  //     是上面那步表格预处理按「事件遏制时间 − 专家研判时间」追加到下载件上的 ——
+  //     所以取值层读得到它（列白名单里要有它）
+  //   · 1 格核心系统事件数量（G10）—— 资产表 + 事件表：**全部传入**的核心业务系统 ->
+  //     资产表「所属业务」-> IP **并成一个集合**，再数事件表里「影响资产」**精确落在**
+  //     该集合里的行数。与 D7/D8/D9 的事件那一段刻意不同（并集 + 一道分类筛都没有）。
+  //     这两份表的列白名单里，本格要的列（「所属业务」「IP地址」「影响资产」）别处已经都要了，
+  //     不额外加列
+  //   · 1 格业务系统数量（G16）—— 只读资产表「所属业务」一列：把这一列的值去重成一个集合、
+  //     数有几个（**整格内容算一个条目**，不按逗号拆开、不分子串；去首尾空白 + 转小写；
+  //     空 / 纯空白 / 横杠占位符跳过）。与 --business-systems 无关，也不叠加报告期过滤。
+  //     它的列（「所属业务」）别处已经要了，不额外加列
+  //   · 2 格资产类型台数（G17 服务器 / G18 PC）—— 只读资产表「资产类型(一级)」一列：
+  //     整格**精确等于**「服务器」/「终端」的行数（不含「网络设备」，也不看二级那列）。
+  //     与 --business-systems 无关，也不叠加报告期过滤。⚠️ 这一列**别处都没要**
+  //     —— 它必须进资产表的列白名单（ASSET_TABLE_SPEC.columns），漏了的话两格会以
+  //     「资产表里找不到「资产类型(一级)」列」报错，不是安静地数出 0
+  // 其余 366 格是 mode:'unresolved'，接不接 ctx 都不写（H7）。
   //
-  // 按需读盘：告警表与事件表**一直读**（那 35 格与 --business-systems 无关），
-  // 资产/漏洞/弱密码三份**只在传了系统名时才读** —— 没名字时 D3:D9 一格都不会写，
-  // 先把上万行的漏洞表读一遍是白读盘。
+  // 读盘：告警表 + 四份总表（STATISTICS_TABLE_SPECS：资产 / 漏洞 / 弱密码 / 事件）
+  // **全部无条件读**。从前资产与弱密码表「只在传了系统名时才读」，D11 立项后不能再这么省
+  // —— 它没传系统名也要读那两份，按需读盘只会让 D11 拿到空 ctx。
   //
   // customer 允许为空串：只传 --customer-id 时客户名本来就没有，
   // 与其编一个名字，不如让 J1 留空 —— createContext 也会把它归一成 ''。
   if (!options.start || !options.end) {
     throw badRequest('缺少 --start / --end：报告参数格 L1/M1 要写报告期（stats/context.js 的 range 是必填）');
   }
-  // 告警表没下到时不传（传空数组）：让 buildReport 去报「缺少 告警表 的下载结果」，
-  // 那是这一轮真正该说的话。这里若自己抛，会把那句更有用的错误盖掉。
+  // 告警表为空（或压根没下到）时给空数组：G5/G6/H6/I6 都数出 0、C133:I134 的定性槽位写空串，
+  // 那是「这段时间没有告警」的结论，不是缺数。
   const alarmRows = results.alarm ? await readAlarmRows(results.alarm.filePath, logger) : [];
 
-  // 事件表**无条件**读（事件定性那 21 格 C135:I137 靠它，与 --business-systems 无关）。
-  // 核心业务系统的 D7:D9 也从这一次读取里取，所以这里的列白名单是两处的并集
-  // （EVENT_TABLE_COLUMNS）。没下到事件表时给空数组：那 21 格走缺数路径、记进错误列表。
-  const eventRows = results.event
-    ? await readStatisticsRows(results.event.filePath, EVENT_TABLE_SPEC, logger)
-    : [];
+  // 四份总表都**无条件**读一次（各 SPEC 的头注写了谁在读、列白名单为什么是并集）。
+  // 某份没下到时给空数组 —— 但那只是一道兜底：真没下到时上面的 failures 分支已经抛了
+  // （R10 缺数不静默），这里见到的表一律是「有行」或「0 行」，「0 行」按 0 / 空串算。
+  const statsTables = {};
+  for (const spec of STATISTICS_TABLE_SPECS) {
+    statsTables[spec.field] = results[spec.type]
+      ? await readStatisticsRows(results[spec.type].filePath, spec, logger)
+      : [];
+  }
 
-  // 核心业务系统：名字取 CLI（--business-systems），三格风险总数要读资产/漏洞/弱密码三份总表
-  // （事件表已在上面读过）。没传系统名时**一份都不读** —— D3:D9 那 6 格一格都不会写
-  // （没名字就没得算），提前把漏洞表（上万行）读一遍纯属白读盘，与「只接告警表」同一个取舍。
+  // 核心业务系统的名字取 CLI（--business-systems）；四份总表与它无关，已在上面读完。
   const businessSystems = splitList(options['business-systems']);
-  const coreSystemTables = {};
-  if (businessSystems.length) {
-    // 超出三个当场报参数错，而不是让取值层丢下第四个名字：模板里只有 3 个槽位，
-    // 静默丢掉的话报告看上去"正常"，但写的东西和用户给的已经不是一个东西了。
-    if (businessSystems.length > MAX_CORE_SYSTEMS) {
-      throw badRequest(
-        `--business-systems 最多 ${MAX_CORE_SYSTEMS} 个（报告里只有核心系统1/2/3 三个槽位），`
-        + `收到 ${businessSystems.length} 个: ${businessSystems.join('、')}`
-      );
-    }
-    for (const spec of CORE_SYSTEM_TABLES) {
-      // 这一份表没下到（如 --type asset）就跳过，交给取值层按下面的口径处理
-      coreSystemTables[spec.field] = results[spec.type]
-        ? await readStatisticsRows(results[spec.type].filePath, spec, logger)
-        : [];
-    }
+  // 超出三个当场报参数错，而不是让取值层丢下第四个名字：模板里只有 3 个槽位，
+  // 静默丢掉的话报告看上去"正常"，但写的东西和用户给的已经不是一个东西了。
+  if (businessSystems.length > MAX_CORE_SYSTEMS) {
+    throw badRequest(
+      `--business-systems 最多 ${MAX_CORE_SYSTEMS} 个（报告里只有核心系统1/2/3 三个槽位），`
+      + `收到 ${businessSystems.length} 个: ${businessSystems.join('、')}`
+    );
+  }
 
-    // 缺哪份表必须留声（用户口径：缺表不整格作废，该段按 0 算、其余照算）。
-    // 取值层那边是纯函数、不打日志，报告落盘后又只有一个数，看不出少算了一段 ——
-    // 所以「哪几份没下到」只能在这里说。
-    // 分两种：三份风险表缺席 -> 那一段按 0；资产表缺席 -> 不是「少一段」，是整格算不出来。
-    const zeroSegments = CORE_SYSTEM_TABLES
-      .filter((spec) => spec.type !== 'asset' && !results[spec.type])
-      .map((spec) => spec.label);
-    if (!results.event) zeroSegments.push(EVENT_TABLE_SPEC.label);
-    if (zeroSegments.length) {
-      logger(`[警告] ${zeroSegments.join('、')}这次没下到：D7:D9 里对应的那一段按 0 计，`
-        + '其余段照算 —— 报告上看不出这个数少算了一段，核对时请留意');
-    }
-    if (!results.asset) {
-      logger('[警告] 资产表这次没下到：没有「业务归属 -> IP」，D7:D9 三格不写值（模板原样保留）');
-    }
+  // 到这里四份总表与告警表都已经读到（没读到的在上面的 failures 分支抛了）。
+  // 留一句「表是空的」的点名：空表在报告上就是一个 0 / 一片空格，与「数据真的没有」
+  // 长得一样 —— 取值层是纯函数、不打日志，所以只能在这里说清楚哪几份这次是空的。
+  const emptyTables = STATISTICS_TABLE_SPECS
+    .filter((spec) => statsTables[spec.field].length === 0)
+    .map((spec) => spec.label);
+  if (alarmRows.length === 0) emptyTables.push(TYPE_LABELS.alarm);
+  if (emptyTables.length) {
+    logger(`[提示] ${emptyTables.join('、')}这次是空表（0 行）：靠它算的格子按 0 / 空串落值`
+      + '（0 是结论，不是缺数）');
   }
 
   const statsCtx = createContext(Object.assign({
@@ -641,15 +788,15 @@ async function runInner(options) {
     customerId: companyId,
     range: { start: options.start, end: options.end },
     businessSystems,
-    alarmRows,
-    eventRows
-  }, coreSystemTables));
+    alarmRows
+  }, statsTables));
 
   const report = await buildReport({
     templatePath: options['report-template'],
     outputPath: reportPath,
     tables: results,
     ctx: statsCtx,
+    preprocess,
     beautify: !(options['no-beautify'] === true || options['no-beautify'] === 'true'),
     beautifyTheme: typeof options['beautify-theme'] === 'string' ? options['beautify-theme'] : undefined,
     logger

@@ -9,6 +9,11 @@
  *   C3  ctx 只放只读数据与报告参数，不放函数、不放中间计算结果
  *
  * M1 阶段：只定义形状与校验。真实表数据要到 M2/M3 由 mssw_client 产出后才有。
+ *
+ * 六份表字段一律归一成数组：**表一定在，只是可能 0 行**。不存在「整份没下到」这种
+ * 取值层看得见的状态 —— 某份表下不到时 scripts/build_report.py 会直接报
+ * 「缺少 X 的下载结果」、整份报告不出（用户口径 2026-10-10），流程根本走不到这里。
+ * 所以 0 行是正常数据：计数格写 0、名次格写空串，都不进错误列表。
  */
 
 /**
@@ -29,8 +34,8 @@ const PARAM_FIELDS = ['customer', 'customerId', 'range', 'protectRange', 'busine
 
 /**
  * 必填的只有报告参数。六份总表**刻意不设必填** ——
- * 缺表属于运行期数据问题，由 missingTables() 报告并走 R10（记入错误列表、绝不填 0），
- * 不是构造 ctx 时的参数错误。
+ * 下载行为一定发生，这里见到的表要么有数据行、要么 0 行，两者都是正常数据；
+ * 真的没下到时流程在 scripts/build_report.py 就被拦了，走不到构造 ctx 这一步。
  */
 const REQUIRED_FIELDS = ['customer', 'range'];
 
@@ -70,7 +75,8 @@ function createContext(input = {}) {
     businessSystems: Object.freeze(Array.isArray(input.businessSystems) ? [...input.businessSystems] : [])
   };
 
-  // 表数据允许缺席（M1 阶段必然全缺），但字段一律存在且是数组，compute 里不用再判 Array
+  // 表字段一律存在且是数组：没传 / 传了空表都归一成 []（= 0 行 = 「这段时间没有数据」，
+  // 那是结论，不是缺数）。compute 里不用再判 Array，也没有「这份表没下到」这种状态可判。
   for (const field of TABLE_FIELDS) {
     ctx[field] = Object.freeze(Array.isArray(input[field]) ? input[field] : []);
   }
@@ -78,9 +84,4 @@ function createContext(input = {}) {
   return Object.freeze(ctx);
 }
 
-/** 哪份总表还没到位。M1 阶段返回全部六份。 */
-function missingTables(ctx) {
-  return TABLE_FIELDS.filter((field) => !ctx || !Array.isArray(ctx[field]) || ctx[field].length === 0);
-}
-
-module.exports = { createContext, missingTables, TABLE_FIELDS, PARAM_FIELDS, REQUIRED_FIELDS };
+module.exports = { createContext, TABLE_FIELDS, PARAM_FIELDS, REQUIRED_FIELDS };

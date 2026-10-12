@@ -21,15 +21,30 @@ npm 依赖（SheetJS 社区版），顺带修掉它解决不了/悄悄丢掉的�
 路径，值/格式/列宽/行高/合并单元格随 sheet 一起原样保留。
 （漏洞表/弱密码表的时间列实测是**字符串**，本来就没有数字格式可还原。）
 
-各表落成 sheet 之后，落盘之前依次还有两步（顺序固定）：
+各表落成 sheet 之后，落盘之前还有一步：
 
-  表格预处理（report_preprocess.py）  资产表建 IP -> 内网/外网 映射，事件表追加「内网外网资产」列
   数据统计取值（writes 段）           写「数据统计」sheet
+
+> **2026-10-12 起本文件不再跑任何表格预处理。** 从前这里有一个「告警表『主机IP』剥括号后缀」
+> 的步骤（`preprocess_workbook(steps=('alarm',))`），现已删除：那一步对取值毫无影响
+> （取值层的 normalizeIp 自己会剥，见 stats/metrics/alarm.js），却让同一个「主机IP」
+> 在仓库里有两个形态。删掉之后交付物里保留平台原样 `172.101.226.10(未归类组)`。
+> 表格预处理现在只有一处 —— **下载之后、解析之前**（mssw_downloader.js 调
+> mssw_preprocess.js -> report_preprocess.preprocess_event_file，**原地改写下载件**，
+> 追加「内网外网资产」列与四个时长列）。用户口径 2026-10-12「取值层必须在预处理之后」
+> 就是这条：那几列必须在 parse* 之前落到文件上，ctx 里的行对象才读得到。
+> **不能改到这里来跑**：那几步是往行末盲追加，引擎里跑会写出重名表头
+> （parse_table_rows.py 见到重名会抛错），而报告 sheet 已经是搬表搬进来的成品了。
+
+搬表读的是**磁盘上那个 xlsx**（`load_first_worksheet`），而下载件在解析之前就被改写过，
+所以报告 sheet 会自动带上预处理追加的那几列 —— 不存在"两处拼接"。
+**搬表就是搬表**：报告里那些 sheet 与平台导出逐格相同，本文件不改任何一格表内容，
+谁要在合并阶段加一道"顺手清洗"，先想清楚人工核对时报告与取值层对不上会怎么样
+（scripts/verify_write_layer.py 的【3.6】正是钉这条的）。
 
 「数据统计」sheet 的写入**地址与取值口径**由 stats/write_statistics_sheet.js 决定
 （CELL_REGISTRY.md R14 / F2）；本文件只执行它给出的 writes 计划，不自己决定写哪一格。
 不管有没有 writes，单元格地址集合都不变（R1 单元格冻结）。
-**表格预处理不依赖 writes**，无条件跑 —— 它改的是事件表，不是「数据统计」。
 
 合并写完后还有一步（在 JS 侧调 scripts/beautify_report.py）：给除「数据统计」外的 sheet
 套统一视觉规范（宋体 + 深蓝表头 + 浅蓝底，主题见 excel_beautifier/themes）。
@@ -46,7 +61,7 @@ payload_json:
     }
 
 输出:
-    stdout: {"sheets", "statistics", "preprocess", "logs"} 这一次 build 的全部结果
+    stdout: {"sheets", "statistics", "logs"} 这一次 build 的全部结果
     stderr: 失败时 {"diag":"error","message","logs"}（logs 是失败前已产生的日志行，
             好让调用方把用户已经"看过"的部分照常打出来）
 
@@ -98,7 +113,6 @@ from openpyxl.utils import get_column_letter
 from openpyxl.utils.datetime import to_excel
 
 from _path_helper import decode_argv
-from report_preprocess import preprocess_workbook
 
 # 模板骨架（R3 + R3a）：缺任何一个都早失败，避免产出缺 sheet 的报告还看起来"成功"。
 # 顺序照抄 data.xlsx 模板的真实顺序（R3：sheet 顺序由模板定，代码不重排）。
@@ -461,12 +475,6 @@ def build_report(payload, logs=None):
             'restoredFormats': restored,
         })
 
-    # 「表格预处理」阶段：所有表都落成 sheet 之后、数据统计取值之前。
-    # 改的是事件表本身，不碰「数据统计」（那是 stats/write_statistics_sheet.js 的
-    # 专属写入区，CELL_REGISTRY.md F2），所以这一步不依赖 writes，无条件跑。
-    # 表头缺列会在这里抛出（平台改列名属于契约变更，宁可失败，也不产出一份悄悄少一列的交付物）。
-    preprocess = preprocess_workbook(workbook, logs)
-
     # 「数据统计」sheet 的取值层。writes 缺席时不写任何格子（M1 行为，模板原样）——
     # 这是刻意的默认值，让「没接 ctx」和「口径未定」两种情况都表现为「模板保持原样」。
     #
@@ -482,7 +490,6 @@ def build_report(payload, logs=None):
     return {
         'sheets': sheets,
         'statistics': {'applied': applied, 'count': len(applied)},
-        'preprocess': {k: v for k, v in preprocess.items() if k != 'logs'},
         'logs': logs,
     }
 

@@ -19,17 +19,21 @@
  *
  * `options.ctx` 由调用方拼装（C1：只有 stats/context.js 能拼）。ctx 里的六份总表**行对象**
  * 来自 R9 的 `parse*`（mssw_parser.js -> scripts/parse_table_rows.py），读的是**下载得到的
- * 中间件**，也就是表格预处理之前的表 —— 所以今天读不到预处理新加的「内网外网资产」列。
+ * 中间件** —— 但事件表那份中间件在解析**之前**已经被表格预处理**原地改写**过
+ * （mssw_downloader.js 调 mssw_preprocess.js -> report_preprocess.preprocess_event_file）。
+ * 所以事件表行对象**能**读到预处理追加的「内网外网资产」列与「遏制时长」列 ——
+ * 用户口径 2026-10-12：**取值层必须在预处理之后**。
+ * 告警表行对象的「主机IP」是**平台原样**（带括号说明那种）—— 取值层比对时用
+ * stats/metrics/rows.js 的 normalizeIp 自己剥，报告 sheet 上也是同一份原样值
+ * （2026-10-12 起合并阶段不再剥括号，见下）。
  * 键是表头文字、空值是空串，契约见 CELL_REGISTRY.md §7（C4–C7）。
  *
- * 各表落成 sheet 之后，落盘之前依次还有两步（顺序在 Python 里固定）：
- *
- *   表格预处理（report_preprocess.py）  资产表建 IP -> 内网/外网 映射，事件表追加「内网外网资产」列
- *   数据统计取值（writes）              写「数据统计」sheet
+ * 各表落成 sheet 之后，落盘之前只有一步（在 Python 里固定）：数据统计取值（writes）。
+ * **表格预处理不在这一步跑** —— 它只有一处，在**下载之后、解析之前**（原地改写下载件，
+ * 见上）；从前这里还兼跑「告警表『主机IP』剥括号后缀」，2026-10-12 已删除。
  *
  * 数据统计 sheet：调用方传了 options.ctx 就写，没传就跳过（模板原样）。不管哪种情况，
- * 单元格地址集合都不变（R1 单元格冻结）。**表格预处理不依赖 ctx，无条件跑** ——
- * 它改的是事件表，不是「数据统计」。
+ * 单元格地址集合都不变（R1 单元格冻结）。
  * 暴露面 尚未迁移，保留模板中的空 sheet。
  *
  * 全部写完后还有一步：调 scripts/beautify_report.py 给除「数据统计」外的 sheet
@@ -164,9 +168,9 @@ async function runBuildEngine(payload, logger, statisticsLogs) {
   return result;
 }
 
-/** 引擎返回的 sheets/preprocess/logs，缺一个都算契约破了 —— 早说，别产出半份报告。 */
+/** 引擎返回的 sheets/statistics/logs，缺一个都算契约破了 —— 早说，别产出半份报告。 */
 function assertEngineResult(result) {
-  const missing = ['sheets', 'preprocess', 'logs'].filter((key) => result[key] === undefined);
+  const missing = ['sheets', 'statistics', 'logs'].filter((key) => result[key] === undefined);
   if (missing.length) {
     throw new Error(`合并脚本返回的 JSON 缺字段: ${missing.join('、')}`);
   }
@@ -182,6 +186,10 @@ function assertEngineResult(result) {
  * @param {Object} options.tables 形如 { asset: {filePath}, alarm: {filePath}, event: {filePath}, vuln: {filePath} }
  * @param {Object} [options.ctx] 由 stats/context.js 构造的计算层输入（CELL_REGISTRY.md §7）。
  *   传了才写「数据统计」sheet；不传则跳过，模板该 sheet 原样（M1 行为）
+ * @param {Object} [options.preprocess] 下载之后、解析之前那次**事件表预处理**的汇总
+ *   （mssw_preprocess.js 的返回，见 mssw_downloader.js）。这里只把它并进返回值，
+ *   好让一条日志链把「预处理跑了什么」讲全 —— 不传就是「这次没跑早预处理」（如 --type 只下
+ *   一张表的跑法）。合并引擎自己**不再**产出任何预处理汇总（那一步 2026-10-12 已删）。
  * @param {boolean} [options.beautify] 是否套统一视觉规范，默认 true
  * @param {string} [options.beautifyTheme] 美化主题，默认 classic
  * @param {(msg: string) => void} [options.logger]
@@ -275,7 +283,13 @@ async function buildReport(options) {
     sheets: result.sheets,
     statistics,
     beautify,
-    preprocess: result.preprocess
+    // 表格预处理**只有一处**：下载之后、解析之前（mssw_preprocess.js ->
+    // report_preprocess.py 的 preprocess_event_file）。调用方跑了就把它的汇总原样传进来，
+    // 这里只是转交出去讲日志。从前这里还要把"引擎里那次告警表剥括号"（result.preprocess）
+    // 合成进来 —— 那一步 2026-10-12 已删除，合并引擎现在只搬表 + 落值，不再产出预处理汇总。
+    // 没传 = 这次没跑早预处理（如 --type 只下一张表的跑法）：给一个形状稳定的空壳，
+    // 别让下游 `preprocess.ran` 变成 undefined（那与 false 不是一回事）。
+    preprocess: options.preprocess || { ran: false, logs: [] }
   };
 }
 
