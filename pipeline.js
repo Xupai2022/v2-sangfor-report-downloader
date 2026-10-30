@@ -29,7 +29,7 @@
  *
  * 2. **Excel 先落盘，PPT 失败不回滚**。顺序硬编码「先 Excel 后 PPT」。
  *    PPT 挂了就把 excel.ok=true / ppt.ok=false 如实写进 JSON，并以非零码退出。
- *    理由：Excel 本身就是可交付物（本仓库的 428 格口径还在起步阶段，
+ *    理由：Excel 本身就是可交付物（本仓库的 429 格口径还在起步阶段，
  *    但已经比 PPT 完整），删掉它等于把已经成功的那一半也扔掉。
  *
  * 3. **跨语言入参整包 B64**。见下方 pptgenArgs()。
@@ -57,7 +57,7 @@ const fs = require('node:fs');
 const { spawn } = require('node:child_process');
 
 const { parseArgs, splitList } = require('./args');
-const { encodePath } = require('./path_helper');
+const { encodePayload } = require('./path_helper');
 const pythonCmd = require('./python_cmd');
 const workdir = require('./workdir');
 const progress = require('./progress');
@@ -268,10 +268,13 @@ function resolveFocus(options) {
  *   - prompt 里可能有引号、空格、反斜杠，逐参转义迟早出错
  *   - args.js 把「下一个 token 以 -- 开头」当成布尔开关，所以一个以 `--` 开头的值没法传
  * 整包 JSON 再 base64 之后只剩 [A-Za-z0-9+/=]，上面三个问题一次全没。
- * 编解码口径与 pptgen/b64.py、scripts/_path_helper.py 一致（'B64:' 前缀 + utf8 的 base64）。
+ * 编解码口径与 pptgen/b64.py、scripts/_path_helper.py 一致（'B64GZ:' 前缀 +
+ * gzip 后再 base64）。**多一层 gzip 是为了绕开 Windows 32767 字符的命令行上限** ——
+ * prompt 一长就会撞上 `spawn ENAMETOOLONG`，而那个错是同步抛的、stderr 为空，
+ * 日志里只剩一句看不出所以然的裸消息（2026-10-29 已被「合并」那步踩过一次）。
  */
 function pptgenArgs(command, payload) {
-  return ['-m', PPTGEN_MODULE, command, '--payload', encodePath(JSON.stringify(payload))];
+  return ['-m', PPTGEN_MODULE, command, '--payload', encodePayload(payload)];
 }
 
 /**
@@ -474,6 +477,10 @@ async function ensureExcel(options, runDir) {
     'customer-id': options['customer-id'],
     start: options.start,
     end: options.end,
+    // 护网（HW）起止时间：只喂 Excel 的 D130（事件表「事件创建时间」落在窗口内的行数）。
+    // 与报告期 --start / --end 是两件事，原样透传给下载层。
+    'protect-start': options['protect-start'],
+    'protect-end': options['protect-end'],
     type: options.type,
     'mssw-base-url': options['mssw-base-url'],
     'mssw-host-header': options['mssw-host-header'],
@@ -663,6 +670,20 @@ async function cmdProxy(command, options) {
   const timeoutMs = Number(options['ppt-timeout-ms'] || DEFAULT_PPT_TIMEOUT_MS);
   const result = await runPptgen(command, payload, options);
 
+  // doctor 的「有检查项没过」是**正常返回值**：exit 7 + 完整 checks/failures，**没有 error 字段**。
+  // 不能交给 pptFailure —— 它只透传带 error 的 JSON，否则一律报成「stdout 里没有 JSON」，
+  // 真正的失败原因（比如 checks.llm.problem / hint）会被截成 400 字塞进 detail.stdout_tail。
+  // 实测踩过：`--probe-llm` 连不上时报的是 pptgen_no_output，看不出是不可达还是 key 不对。
+  // 这条必须排在下面的 exitCode 判断**之前**，否则永远走不到。
+  if (command === 'doctor' && result.json && !result.json.error) {
+    for (const failure of result.json.failures || []) {
+      logger(`  [FAIL] ${failure.check}: ${failure.problem}`);
+      if (failure.hint) logger(`     hint: ${failure.hint}`);
+    }
+    logger(result.json.ok ? '  doctor 全绿' : `  doctor 未通过（${(result.json.failures || []).length} 项）`);
+    return { summary: result.json, exitCode: result.exitCode };
+  }
+
   if (result.exitCode !== EXIT_OK || !result.json) {
     const error = pptFailure(command, result, timeoutMs);
     return {
@@ -716,6 +737,11 @@ generate 专有:
   --customer <名>            安全客户名（必需，除非用 --customer-id）
   --start <Y-M-D>            统计起始日（必需，除非 --no-download）
   --end <Y-M-D>              统计结束日
+  --protect-start <Y-M-D>    护网（HW）起，与 --protect-end 成对传入，闭区间。
+  --protect-end <Y-M-D>      护网（HW）止。
+                             这一对只喂 Excel「数据统计」的 D130「hw 时间事件总数」，
+                             与报告期 --start / --end 是两件事；**可选**，不传则 D130 写 0
+                             （= 这次不按 HW 窗口统计）。
   --cookie-path <p>          MSSW cookie 文件；**传了即本地模式**，不传则走集群
                              （集群由 session-manager 代管登录态，默认如此）
   --mssw-base-url <origin>   MSSW 入口；裸域名默认补 https://，集群入口要写完整

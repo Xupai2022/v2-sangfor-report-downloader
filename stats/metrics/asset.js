@@ -12,6 +12,9 @@
  *   · G17「服务器资产数量」/ G18「PC资产数量」—— 数「资产类型(一级)」这一列里
  *     整格精确等于某个值的**行数**。两格只差一个待匹配的类型值，所以共用
  *     assetCountByPrimaryType（H4：同一段过滤条件只写一遍）。
+ *   · K79「内网服务器资产数量」/ K80「内网MSS服务资产数」—— 数「互联网暴露」= 未暴露
+ *     且「资产类型(一级)」= 服务器 的行数；K80 再加「托管状态」属于基础托管/深度托管。
+ *     两格共用 intranetServerAssetCount（H4），K80 只是在同一段骨架上多一个条件。
  */
 
 const { requireColumn, cellText, normalizeIp } = require('./rows');
@@ -69,6 +72,36 @@ const SERVER_ASSET_TYPE = '服务器';
  * 平台这一列给的是「终端」（实测 117 行里 99 行），报告口径把它叫作 PC。
  */
 const PC_ASSET_TYPE = '终端';
+
+/**
+ * 「互联网暴露」的表头文字 —— K79 / K80 定「内网」范围要读的列。
+ *
+ * 依据：`outputs/20261021_150034/一致性验收客户_report.xlsx` 的「资产表」sheet 表头行
+ * （第 2 行，第 1 行是空的）里逐字命中「互联网暴露」。实测取值形如 `未暴露` / `已暴露`。
+ * 同一列也是事件表预处理（report_preprocess.py）建 IP -> 内网/外网映射的依据。
+ */
+const INTERNET_EXPOSURE_COLUMN = '互联网暴露';
+
+/**
+ * K79 / K80 认的「内网」取值（用户口径 2026-10-21）—— 整格**精确相等**，不是包含。
+ * `未暴露` 才算内网；`已暴露` / 空值 / 别的写法都不算。
+ */
+const NOT_EXPOSED_VALUE = '未暴露';
+
+/**
+ * 「托管状态」的表头文字 —— K80 的第二个附加条件要读的列。
+ *
+ * 依据：`outputs/20261021_150034/一致性验收客户_report.xlsx` 的「资产表」sheet 表头行
+ * 逐字命中「托管状态」（全表 35 列里只有这一列含「托管」）。实测取值形如 `基础托管`
+ * / `深度托管`，另有空值。
+ */
+const HOSTING_STATUS_COLUMN = '托管状态';
+
+/**
+ * K80「内网MSS服务资产数」认的托管状态取值（用户口径 2026-10-21）—— 二选一，**精确相等**。
+ * 「基础托管」或「深度托管」任一即算；空值、别的托管档位都不算。
+ */
+const MSS_HOSTING_STATUSES = ['基础托管', '深度托管'];
 
 /**
  * 「重要级别」列里表示核心资产的那个值（用户口径）。
@@ -244,17 +277,80 @@ function assetCountByPrimaryType(ctx, assetType) {
   ).length;
 }
 
+/**
+ * 资产表里「内网服务器」资产的**行数** —— K79「内网服务器资产数量」与
+ * K80「内网MSS服务资产数」共用的那一段（H4）。
+ *
+ * 用户口径（2026-10-21）：
+ *   · K79：精确查找「互联网暴露」列 = `未暴露` **且** 「资产类型(一级)」列 = `服务器` 的总数；
+ *   · K80：在 K79 的基础上，**再**要求「托管状态」列的值为 `基础托管` 或 `深度托管`。
+ * 两个判据都是**整格精确相等**（比较前只去首尾空白），不做包含 / 前缀 / 全半角归一。
+ *
+ * 计数单位是**资产行数**（一台资产一行），不按 IP 去重 —— 同一台机器在表里出现两行就是 2。
+ * 与 `--business-systems` 无关，也不叠加报告期过滤（资产表是当前台账）。
+ *
+ * @param {Object} ctx 由 stats/context.js 构造（CELL_REGISTRY.md §7）
+ * @param {string[]|null} hostingStatuses 额外要求的托管状态集合；`null` = 不按托管状态筛（K79）
+ * @returns {number} 命中行数。资产表 0 行、或一台都不命中时是 **0**（0 是结论，不是缺数）
+ * @throws {Error} 有行数据但表头里没有要读的列（列名对不上，不许静默数出 0）。
+ *   只要求真正用到的那几列：K79 不要求「托管状态」（它不读那一列）。
+ */
+function intranetServerAssetCount(ctx, hostingStatuses) {
+  const rows = Array.isArray(ctx.assetRows) ? ctx.assetRows : [];
+  if (rows.length === 0) return 0;
+
+  requireColumn(rows, INTERNET_EXPOSURE_COLUMN, '资产表');
+  requireColumn(rows, PRIMARY_ASSET_TYPE_COLUMN, '资产表');
+  const filterByHosting = Array.isArray(hostingStatuses) && hostingStatuses.length > 0;
+  if (filterByHosting) requireColumn(rows, HOSTING_STATUS_COLUMN, '资产表');
+
+  return rows.filter((row) => {
+    if (cellText(row[INTERNET_EXPOSURE_COLUMN]) !== NOT_EXPOSED_VALUE) return false;
+    if (cellText(row[PRIMARY_ASSET_TYPE_COLUMN]) !== SERVER_ASSET_TYPE) return false;
+    if (!filterByHosting) return true;
+    return hostingStatuses.includes(cellText(row[HOSTING_STATUS_COLUMN]));
+  }).length;
+}
+
+/**
+ * K79「内网服务器资产数量」：内网（「互联网暴露」= `未暴露`）的服务器资产行数。
+ *
+ * @param {Object} ctx 由 stats/context.js 构造
+ * @returns {number} 行数；表为空 / 一台都不命中 -> 0
+ * @throws {Error} 缺「互联网暴露」或「资产类型(一级)」列
+ */
+function intranetServerCount(ctx) {
+  return intranetServerAssetCount(ctx, null);
+}
+
+/**
+ * K80「内网MSS服务资产数」：K79 的口径上再要求「托管状态」= `基础托管` / `深度托管`。
+ *
+ * @param {Object} ctx 由 stats/context.js 构造
+ * @returns {number} 行数；表为空 / 一台都不命中 -> 0
+ * @throws {Error} 缺「互联网暴露」「资产类型(一级)」或「托管状态」列
+ */
+function intranetMssAssetCount(ctx) {
+  return intranetServerAssetCount(ctx, MSS_HOSTING_STATUSES);
+}
+
 module.exports = {
   BUSINESS_COLUMN,
   IP_COLUMN,
   IMPORTANT_LEVEL_COLUMN,
   PRIMARY_ASSET_TYPE_COLUMN,
+  INTERNET_EXPOSURE_COLUMN,
+  HOSTING_STATUS_COLUMN,
   CORE_LEVEL,
   SERVER_ASSET_TYPE,
   PC_ASSET_TYPE,
+  NOT_EXPOSED_VALUE,
+  MSS_HOSTING_STATUSES,
   assetIpsOfBusinessSystem,
   coreAssetIps,
   businessSystemNames,
   businessSystemCount,
-  assetCountByPrimaryType
+  assetCountByPrimaryType,
+  intranetServerCount,
+  intranetMssAssetCount
 };

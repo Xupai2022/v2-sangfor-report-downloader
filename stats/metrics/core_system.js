@@ -15,21 +15,31 @@
  * 派生量必须提到 metrics 并具名导出」。G6/H6/I6（核心系统威胁告警数量）同理：
  * 三格共用 coreSystemThreatAlarmTotalAt，只是槽位不同。
  *
+ * 两条「合计」加式也在这里，彼此并行、互不顶替：
+ *   · G12 = D7 + D8 + D9 —— coreSystemRiskGrandTotal（「风险总数」那套判据）
+ *   · G13 = C18 + D18 + E18 —— coreSystemClosedRiskGrandTotal（D13 的「已闭环」四段）
+ *
  * ⭐ --business-systems 是**可选参数**（用户口径 2026-10-12），于是本域只有两条落法：
  *   · 写**系统名本身**的 D3/D4/D5：槽位空着就没东西可写 -> 不写值 + 记错误（coreSystemNameAt）。
- *   · 写**算出来的数**的 D6 合计 / D7:D9 / G6/H6/I6 / G10：槽位空着那个数就是 0，
- *     不记错误（coreSystemSlotName；G10 走 noCoreSystems 提前落 0）。
+ *   · 写**算出来的数**的 D6 合计 / D7:D9 / G6/H6/I6 / G10 / G14：槽位空着那个数就是 0，
+ *     不记错误（coreSystemSlotName；G10 与 G14 走 noCoreSystems 提前落 0）。
  *   "一个系统都没传"只是"三个槽位同时空着"的那一档，不另立一条口径。
  *
  * G10「核心系统事件数量」也住在这里：它同样从「系统名 -> 资产表 -> IP」起手，
  * 只是把**全部传入系统**的 IP 并成一个集合（不按槽位分），再去事件表数行
  * —— 与 D7/D8/D9 的事件那一段（逐系统 + 分类关键词）刻意不同，见 coreSystemsEventCount。
+ *
+ * G14「核心系统威胁事件总数」也在这里，它**就在 G10 那一步之上**：
+ * 同一个 IP 并集、同一份事件表，只多一道「GPT研判结论」精确等于「真实攻击未成功」的筛
+ * （用户口径 2026-10-12）—— 两格的关系是"G14 是 G10 的子集"，不是两条各算各的口径，
+ * 所以它们**共用 coreSystemsIpsUnion**，本文件一个字都不重算（H4）。
  */
 
 const { assetIpsOfBusinessSystem } = require('./asset');
+const { closedRiskTotalOnIps } = require('./closed_risk');
 const { exploitableVulnCount } = require('./vuln');
 const { weakPwdRiskCount } = require('./weakpwd');
-const { accountRiskEventCount, eventCountOnIps } = require('./event');
+const { accountRiskEventCount, eventCountOnIps, threatEventCountOnIps } = require('./event');
 const { gptVerdictAlarmCountOnIps } = require('./alarm');
 
 /**
@@ -186,6 +196,61 @@ function coreSystemThreatAlarmTotalAt(ctx, rank) {
 }
 
 /**
+ * 第 rank 个核心业务系统的**已闭环风险总数** —— C18/D18/E18 各取一个槽位
+ * （用户口径 2026-10-22：D13 那四段，各自只数「IP 落在该系统集合里」的行）。
+ *
+ * 两步，与 D7/D8/D9 同一套「资产表是钥匙」的思路：
+ *   ① 资产表：「所属业务」子串包含该系统名 -> IP 集合（assetIpsOfBusinessSystem）
+ *   ② D13 的四项加数各自只留 IP 落在集合里的行再相加（closedRiskTotalOnIps）——
+ *      四段的判据、表来源、加式一个字都不重写（H4），本格只负责取 IP 集合。
+ *
+ * ⚠️ 与 D7/D8/D9 的风险总数**不是同一个数**：那三格是「漏洞 × 弱密码 × 事件」三套
+ * 判据（D10/D12 那一族），本格是 D13 的「已闭环」四段（D14/D15/D16/D17）。
+ * 别拿 coreSystemRiskTotalAt 来顶。
+ * ⚠️ 数行数、保留 D14/D15 的重叠、系统之间各算各的（一台资产同属两个系统时
+ * 那一行在两个槽位各计一次）—— 三条都是用户口径 2026-10-22 明确过的。
+ *
+ * @returns {number} 行数。该系统名下一条已闭环风险都没有时是 0（0 是结论，不是缺数）；
+ *   资产表为空、或该系统名下没有资产时 IP 集合是空集，同样是 0。
+ *   **这个槽位没有系统时本格写 0**（与 D6:D9 / G6/H6/I6 / G10 同一条，
+ *   见 coreSystemSlotName）。
+ * @throws {Error} 多于 MAX_CORE_SYSTEMS 个系统（coreSystemNames 抛出）；
+ *   资产表读不出「所属业务」/「IP地址」列，或四段里任何一段缺列
+ *   （各表自己的文案，本函数不替它们改写）
+ */
+function coreSystemClosedRiskTotalAt(ctx, rank) {
+  const name = coreSystemSlotName(ctx, rank);
+  if (!name) return 0;
+
+  return closedRiskTotalOnIps(ctx, assetIpsOfBusinessSystem(ctx, name));
+}
+
+/**
+ * 几个核心业务系统的**已闭环风险总数合计** —— G13「核心系统闭环风险数」。
+ *
+ * 就是 C18 + D18 + E18 三格的值相加（用户口径 2026-10-22「取值是 C18 + D18 + E18」），
+ * 不另起口径：每个系统的数怎么来的见 coreSystemClosedRiskTotalAt，本函数一个字都不重算
+ * （H4：同一个量只算一次）。与 G12（= D7 + D8 + D9）是并行的两条加式 ——
+ * 一条加「风险总数」，一条加「已闭环风险总数」，**不是同一个数**。
+ * 三个槽位一个不落地加 —— 空着的槽位贡献 0（用户口径 2026-10-12），
+ * 于是"只传了 2 个系统"时本格就是那两个数之和；一个都没传时是 0。
+ * ⚠️ 三个槽位之间**不去重**：一台资产同属两个系统时，它在两个槽位各计一次，
+ * 本格也照样各加一次（与 C18/D18/E18 的口径逐字一致）。
+ *
+ * @returns {number} 三个槽位已闭环风险总数之和。
+ * @throws {Error} 多于 MAX_CORE_SYSTEMS 个系统时由 coreSystemNames 抛出；
+ *   资产表 / 漏洞表 / 弱密码表 / 事件表里有行却读不出要读的列时由
+ *   coreSystemClosedRiskTotalAt 抛出，本函数不吞 —— 本格同样不写值。
+ */
+function coreSystemClosedRiskGrandTotal(ctx) {
+  let total = 0;
+  for (let rank = 0; rank < MAX_CORE_SYSTEMS; rank += 1) {
+    total += coreSystemClosedRiskTotalAt(ctx, rank);
+  }
+  return total;
+}
+
+/**
  * 本次传入的**全部**核心业务系统名下的资产 IP 集合（并集）—— G10 的第一步。
  *
  * 「资产表 -> IP」这一步一个字都不重写（H4）：逐个系统调 assetIpsOfBusinessSystem，
@@ -244,6 +309,41 @@ function coreSystemsEventCount(ctx) {
 }
 
 /**
+ * 本次传入的全部核心业务系统名下、**「GPT研判结论」命中「真实攻击未成功」**的事件**行数**
+ * —— G14「核心系统威胁事件总数」。
+ *
+ * 与 G10 是**同起手、多一道筛**的两格（用户口径 2026-10-12：「之前统计的所有核心系统的
+ * 集合」—— 就是 G10 用的那个 IP 并集，一个字不重算 ——「然后事件表精确查找『GPT研判结论』
+ * 列，精确匹配值是『真实攻击未成功』的行，命中的话再精确查找『影响资产』列的值，
+ * 如果命中集合的资产就加 1」）：
+ *   ① 资产表：各系统名 -> 「所属业务」子串包含 -> IP，**并成一个集合**（coreSystemsIpsUnion，
+ *      与 G10 同一份，H4）
+ *   ② 事件表：「影响资产」精确落在该集合里、**且**「GPT研判结论」整格精确等于
+ *      「真实攻击未成功」的行数（threatEventCountOnIps —— 判据与 G5/G6/H6/I6/G7 同一句）
+ *
+ * ⚠️ 两格的关系只能读成一个方向：**G14 的候选行是 G10 那批的子集**（G10 不看研判结论，
+ * 落在这些 IP 上的每一行都算）。所以 G14 恒 ≤ G10，同一份数据上两格相等时是巧合、
+ * 不是"两格本来就同值"——它们没有 alias 关系，各自的 desc 各写各的，别顺手合并成一格。
+ * 也**别**把它当成 G6/H6/I6（那三格读的是**告警表**的「主机IP」、且逐系统各圈各的集合）。
+ *
+ * @returns {number} 行数。这些系统名下一行都没命中时是 0（0 是结论，不是缺数）；
+ *   资产表为空、或这些系统名下没有资产时集合是空集，同样是 0。
+ *   **一个系统都没传时也写 0**（与 G10 / D6:D9 / G6/H6/I6 同一条：没有系统就没有可数的
+ *   范围，按 0 落值、不记错误 —— 这一格**连事件表都不打开**，所以列名对不上也不会让它
+ *   单独报错）。
+ * @throws {Error} 多于 MAX_CORE_SYSTEMS 个（coreSystemsIpsUnion 抛出）；
+ *   资产表读不出要读的那两列，或事件表读不出「影响资产」/「GPT研判结论」列
+ *   （各表自己的文案，本函数不替它们改写）
+ */
+function coreSystemsThreatEventCount(ctx) {
+  // 与 G10 逐字同一条短路（用户口径 2026-10-12）：没有系统就没有可数的范围，
+  // 连事件表都不打开 —— 八格同一个输入就得同一个落法。
+  if (noCoreSystems(ctx)) return 0;
+
+  return threatEventCountOnIps(ctx, coreSystemsIpsUnion(ctx));
+}
+
+/**
  * 几个核心业务系统的风险总数**合计** —— D6「安全风险总数」。
  *
  * 就是 D7/D8/D9 三格的值相加，不另起口径：每个系统的数怎么来的（三段各按哪张表、
@@ -275,7 +375,10 @@ module.exports = {
   coreSystemNameAt,
   coreSystemRiskTotalAt,
   coreSystemRiskGrandTotal,
+  coreSystemClosedRiskTotalAt,
+  coreSystemClosedRiskGrandTotal,
   coreSystemThreatAlarmTotalAt,
   coreSystemsIpsUnion,
-  coreSystemsEventCount
+  coreSystemsEventCount,
+  coreSystemsThreatEventCount
 };

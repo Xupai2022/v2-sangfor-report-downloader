@@ -34,7 +34,8 @@
  *
  * 数据统计 sheet：调用方传了 options.ctx 就写，没传就跳过（模板原样）。不管哪种情况，
  * 单元格地址集合都不变（R1 单元格冻结）。
- * 暴露面 尚未迁移，保留模板中的空 sheet。
+ * 六张总表**都搬**（暴露面 2026-10-15 起也搬，见 TABLE_SHEET_NAMES）——
+ * 少任何一个 table 都在 scripts/build_report.py 里当场报「缺少 X 的下载结果」、整份报告不出。
  *
  * 全部写完后还有一步：调 scripts/beautify_report.py 给除「数据统计」外的 sheet
  * 套统一视觉规范（宋体 + 深蓝表头 + 浅蓝底，主题见 excel_beautifier/themes）。
@@ -45,23 +46,37 @@
 const fs = require('fs');
 const path = require('path');
 
-const { encodePath } = require('./path_helper');
+const { encodePath, encodePayload } = require('./path_helper');
 const pythonCmd = require('./python_cmd');
 const workdir = require('./workdir');
 const { buildStatisticsWrites } = require('./stats/write_statistics_sheet');
 
-// 模板骨架（R3 + R3a：6 个 sheet 顺序不变，外加第 7 个「弱密码表」）
+// 模板骨架（R3 + R3a：6 个 sheet 顺序不变，外加弱密码表的两张）
 // 顺序照抄 data.xlsx 模板的真实顺序（R3：sheet 顺序由模板定，代码不重排）。
 // 这份列表只用于「模板缺 sheet 就早失败」的存在性校验，顺序本身不参与决策。
-const TEMPLATE_SHEETS = ['数据统计', '暴露面', '资产漏洞表', '资产表', '告警表', '事件表', '弱密码表'];
+// 「资产漏洞表」2026-10-16 拆成「内网漏洞表」「互联网漏洞表」两个 sheet（位置仍在第 3、4）。
+// 「弱密码表」2026-10-19 拆成「内网弱密码表」「互联网弱密码表」（追加在末尾）。
+const TEMPLATE_SHEETS = [
+  '数据统计', '暴露面', '内网漏洞表', '互联网漏洞表', '资产表', '告警表', '事件表',
+  '内网弱密码表', '互联网弱密码表'
+];
 
-/** 表类型 -> 报告里的 sheet 名。 */
+/** 表类型 -> 报告里的 sheet 名（一个下载件对应多张 sheet 的见 vuln，那一条是数组）。 */
 const TABLE_SHEET_NAMES = {
-  asset: '资产表',
-  alarm: '告警表',
-  event: '事件表',
-  vuln: '资产漏洞表',
-  weakpwd: '弱密码表'
+  asset: ['资产表'],
+  alarm: ['告警表'],
+  event: ['事件表'],
+  // 漏洞表 2026-10-16 起是**一个下载件搬出两张**：平台把表拆成内网/外网两份报表，
+  // 解包那一步（mssw_vuln_extract.js）已经把两份合进一个工作簿的两张同名 sheet，
+  // 所以这里只是「同一个 filePath、按 sheet 名搬两次」。
+  vuln: ['内网漏洞表', '互联网漏洞表'],
+  // 弱密码表是**两次独立下载**（两个类型、两个 filePath、各搬一张）：
+  // 内网走 /order/v1/vul_manage/vul_risk_export，互联网走 /order/v1/internet_vul_manage/vul_risk_export。
+  weakpwd: ['内网弱密码表'],
+  weakpwd_internet: ['互联网弱密码表'],
+  // 暴露面表 2026-10-15 接入：模板里那张「暴露面」sheet 从"空表"变成"搬表"的对象。
+  // sheet 名照模板（R3 输出冻结），与总表的中文名「暴露面表」差一个字，别混。
+  exposed: ['暴露面']
 };
 
 /** 合并引擎，以及它必须绕开的 sheet（数据统计 sheet 单元格冻结，MIGRATION.md R1）。 */
@@ -154,7 +169,7 @@ function buildFailure(error) {
 async function runBuildEngine(payload, logger, statisticsLogs) {
   let result;
   try {
-    result = await runPython(BUILD_SCRIPT, [encodePath(JSON.stringify(payload))], '合并');
+    result = await runPython(BUILD_SCRIPT, [encodePayload(payload)], '合并');
   } catch (error) {
     const failure = buildFailure(error);
     failure.logs.forEach((line) => logger(line));
@@ -306,7 +321,7 @@ function beautifyReport(filePath, options = {}) {
   const theme = options.theme || DEFAULT_BEAUTIFY_THEME;
   return runPython(
     BEAUTIFY_SCRIPT,
-    [encodePath(filePath), encodePath(JSON.stringify({ theme, exclude_sheets: BEAUTIFY_EXCLUDE_SHEETS }))],
+    [encodePath(filePath), encodePayload({ theme, exclude_sheets: BEAUTIFY_EXCLUDE_SHEETS })],
     '美化'
   );
 }

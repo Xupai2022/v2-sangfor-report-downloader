@@ -31,13 +31,22 @@
 单元格值的形态见 `format_cell_value`（时间列给的是 **epoch 秒**，R11）。
 
 用法:
-    python parse_table_rows.py '<payload_json>'    # 建议过一遍 B64: 前缀（中文路径）
+    python parse_table_rows.py '<payload>'    # 走 B64GZ:（gzip + base64）或 B64: 前缀（中文路径）
 payload_json:
     {
       "path":    "<xlsx 绝对路径>",
-      "sheet":   null,              # null / 省略 = 第一个 worksheet
+      "sheet":   null,              # null / 省略 = 第一个 worksheet；也可以是名字，或名字数组
       "columns": ["告警定性"]        # 省略 = 全部具名列（小心：大表会撞 maxBuffer）
     }
+
+`sheet` 传**数组**时，多张 worksheet 会被逐张读、行**顺序拼接**成同一个行数组
+（漏洞表 2026-10-16 起的用法：下载件里内网/外网各一张 sheet，而取值层的口径是
+「全表 = 两份相加」，见 stats/metrics/vuln.js 头注）。此时：
+
+  · header       回报**第一张** sheet 的表头（诊断用，两张的列集本来就不同）
+  · rowCount/rows 两张的数据行拼接后的总数
+  · missingColumns 各张的并集（某张缺一列就会报出来 —— 那正是「列名被改了」的信号）
+  · unnamedColumns 各张之和
 
 输出:
     stdout: {"sheet", "header", "rowCount", "rows", "missingColumns", "unnamedColumns"}
@@ -67,45 +76,16 @@ for _stream in (sys.stdout, sys.stderr):
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from openpyxl import load_workbook
-
 from _path_helper import decode_argv
 # 行集合的口径必须与合并引擎同源，否则取值层数出的行数与交付物里看到的对不上
 from build_report import (
     collect_source_rows,
     is_blank,
     js_string,
-    load_first_worksheet,
+    load_source_workbook,
+    pick_source_sheet,
     split_leading_blank_rows,
 )
-
-
-def load_source_sheet(file_path, sheet_name=None):
-    """读一份导出的总表 -> (实际 sheet 名, worksheet)。
-
-    sheet_name 为空时取第一个 worksheet，走的是合并引擎那条路
-    （load_first_worksheet）：**普通模式，不是 read_only**。平台有
-    `<dimension ref="A1"/>` 声明不准的导出，read_only 会只读到 A1（见
-    _path_helper.reset_read_only_dimensions 的说明）。data_only=True 与引擎一致：
-    要的是缓存值，不是公式。
-    """
-    if not file_path:
-        raise ValueError('总表路径为空')
-    path = Path(file_path)
-    if not path.exists():
-        raise ValueError(f'总表不存在: {file_path}')
-
-    if not sheet_name:
-        _workbook, name, sheet = load_first_worksheet(file_path)
-        return name, sheet
-
-    workbook = load_workbook(path, data_only=True)
-    if sheet_name not in workbook.sheetnames:
-        raise ValueError(
-            f'总表里没有 sheet 「{sheet_name}」: {file_path}'
-            f'（现有: {"、".join(workbook.sheetnames)}）'
-        )
-    return sheet_name, workbook[sheet_name]
 
 
 def format_cell_value(value):
@@ -163,23 +143,43 @@ def read_header_and_rows(sheet):
     return header, [values for values, _formats in rows[1:]]
 
 
-def parse_table_rows(payload):
-    """R9 的 parse*：总表 -> 行对象数组。返回体见模块头注。"""
-    sheet_name, sheet = load_source_sheet(payload.get('path'), payload.get('sheet') or None)
+def normalize_sheet_names(value):
+    """payload 的 `sheet` -> sheet 名列表。
 
-    requested = payload.get('columns')
-    if requested is not None:
-        if not isinstance(requested, list) or not all(isinstance(c, str) for c in requested):
-            raise ValueError('columns 必须是字符串数组（或省略表示要全部具名列）')
-        requested = [column for column in requested if column]
+    空列表 = 「取第一个 worksheet」（老路径，不认名字）。字符串 = 单个名字，
+    字符串数组 = 逐个读、行顺序拼接。其余形态直接抛错 —— `sheet` 传错会静默读到
+    另一张 sheet 上（漏洞表那两份的列集本来就不同），不值得为它做容错。
+    """
+    if value is None or value == '':
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list) and all(isinstance(name, str) for name in value):
+        names = [name for name in value if name]
+        if names:
+            return names
+    raise ValueError('sheet 必须是 sheet 名字符串、名字数组（或省略表示第一个 worksheet）')
 
-    header, value_rows = read_header_and_rows(sheet)
+
+def build_sheet_records(actual_name, header, value_rows, requested):
+    """一张 sheet -> 它的行对象数组与诊断信息。
+
+    四条硬规矩（见模块头注）**逐张 sheet 各判一遍**：两张 sheet 的表头本就不同，
+    「列名对不上」「表头重名」都要落到具体是哪一张上，报错文案里因此带着 sheet 名。
+
+    列白名单里的某一列若只在其中一张里有（另张没有），那张的行对象就不带这个键
+    （规矩 3）—— 所以**同一批行里不同 sheet 来的行，键集可能不同**。这正是
+    `missingColumns` 要取并集的原因：某张缺一列就得报出来，那是「列名被改了」的信号。
+    注意是**并集、不是交集** —— 只要有一张读不出这一列就报（不是「两张都缺才算缺」）。
+    反过来也成立：两张都有的列（漏洞表那三列白名单内外网都有）一个都不会误报，
+    哪怕两份的列数差着 11 列。
+    """
     named = [name for name in header if name]
 
     duplicated = sorted({name for name in named if named.count(name) > 1})
     if duplicated:
         raise ValueError(
-            f'总表 {sheet_name} 的表头有重名列: {"、".join(duplicated)}。'
+            f'总表 {actual_name} 的表头有重名列: {"、".join(duplicated)}。'
             '行对象以表头文字为键，重名列会互相覆盖 —— 这里不做「取第几个」的猜测，'
             '先让平台把列名定下来。'
         )
@@ -190,7 +190,7 @@ def parse_table_rows(payload):
         if name and name not in index_of:
             index_of[name] = index
 
-    wanted = named if requested is None else [column for column in requested if column]
+    wanted = named if requested is None else requested
     # 表头里没有的列不进行对象（规矩 3），只回报给调用方
     missing = [column for column in wanted if column not in index_of]
     keys = [column for column in wanted if column in index_of]
@@ -204,12 +204,58 @@ def parse_table_rows(payload):
         data.append(record)
 
     return {
-        'sheet': sheet_name,
-        'header': header,
-        'rowCount': len(data),
         'rows': data,
         'missingColumns': missing,
         'unnamedColumns': len(header) - len(named),
+    }
+
+
+def parse_table_rows(payload):
+    """R9 的 parse*：总表 -> 行对象数组。返回体见模块头注。
+
+    `sheet` 是数组时（漏洞表：内网/外网两张 sheet），逐张按**同一份列白名单**读、
+    行顺序拼接 —— 拼接顺序就是数组顺序，本函数不排序、不去重、不合并同 IP 的行。
+    """
+    file_path = payload.get('path')
+    sheet_names = normalize_sheet_names(payload.get('sheet'))
+
+    requested = payload.get('columns')
+    if requested is not None:
+        if not isinstance(requested, list) or not all(isinstance(c, str) for c in requested):
+            raise ValueError('columns 必须是字符串数组（或省略表示要全部具名列）')
+        requested = [column for column in requested if column]
+
+    # 一个文件里的多张 sheet 共用同一个 workbook（不必按 sheet 各打开一遍）
+    workbook = load_source_workbook(file_path)
+
+    actual_names = []
+    header = []
+    rows = []
+    missing = []
+    unnamed = 0
+
+    for sheet_name in (sheet_names or [None]):
+        actual_name, sheet = pick_source_sheet(workbook, file_path, sheet_name)
+        sheet_header, value_rows = read_header_and_rows(sheet)
+        records = build_sheet_records(actual_name, sheet_header, value_rows, requested)
+
+        # header 只回报**第一张** sheet 的表头（诊断用）：两张的列集不同，
+        # 拼成一份「表头」只会得到一份哪张都对不上的东西。
+        if not actual_names:
+            header = sheet_header
+        actual_names.append(actual_name)
+        rows.extend(records['rows'])
+        missing.extend(name for name in records['missingColumns'] if name not in missing)
+        unnamed += records['unnamedColumns']
+
+    return {
+        # 多张时用 `+` 连接（诊断字段；实际是哪几张看行列数对不对得上）
+        'sheet': '+'.join(actual_names),
+        'header': header,
+        'rowCount': len(rows),
+        'rows': rows,
+        'missingColumns': missing,
+        'unnamedColumns': unnamed,
     }
 
 

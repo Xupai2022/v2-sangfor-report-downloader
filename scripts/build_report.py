@@ -13,13 +13,27 @@ npm 依赖（SheetJS 社区版），顺带修掉它解决不了/悄悄丢掉的�
               下游消费方按第 2 行读表头，这里千万不能"顺手"把首行空行删掉。
   告警表    ← 第 1 行表头、第 2 行起数据，列宽按内容自适应（10~50 字符）
   事件表    ← 同告警表
-  资产漏洞表 ← 同告警表（平台导出的「漏洞」sheet 也是第 1 行表头）
+  内网漏洞表 ← 同告警表（一个下载件搬出两张，见下表「内网漏洞表 / 互联网漏洞表」）
+  互联网漏洞表 ← 同内网漏洞表
   弱密码表   ← 同告警表（平台导出的「弱密码」sheet 也是第 1 行表头）
+  暴露面     ← 同告警表（2026-10-15 接入。⚠️ 平台导出的「暴露面」表**没有样本**，
+              按第 1 行表头的假设走 rebuild；拿到样本后若发现它是"第 1 行空 + 第 2 行表头"
+              那种形态，要改成 copy_sheet_verbatim 那条路 —— 否则表头会被当成数据行）
 
-告警表/事件表/资产漏洞表/弱密码表是「值搬过去 + 数字格式另还原」（见 collect_source_rows）：
+> 2026-10-16 起漏洞表是**一个下载件对应两张 sheet**：平台把漏洞表拆成内网/外网两份报表
+> （下载产物是 zip，见 scripts/extract_vuln_report.py），那一步已经把两份合进**一个**
+> 工作簿的两张 sheet，所以搬表这边只是「同一个 filePath、按 sheet 名搬两次」。
+> 两张 sheet **保持各自原表头**（30 列 / 21 列），**不做并集对齐** —— 用户口径 2026-10-16
+> 要的就是分开看。取值层那边按同一份三列白名单把两份的行拼成 ctx.vulnRows（全表 = 两份相加）。
+
+告警表/事件表/内网漏洞表/互联网漏洞表/弱密码表/暴露面是「值搬过去 + 数字格式另还原」（见 collect_source_rows）：
 平台导出里时间列是带日期格式的序列号，只搬值会让它在报告里显示成 46225.42。资产表不走这条
 路径，值/格式/列宽/行高/合并单元格随 sheet 一起原样保留。
 （漏洞表/弱密码表的时间列实测是**字符串**，本来就没有数字格式可还原。）
+
+**唯一一种会被搬过去的填充**：标记色行（漏洞表整行粉红 = 「最近扫描新增漏洞」，
+平台把这条约定写在了表头里）。识别与涂色都在 scripts/marker_colors.py，只认同一种
+显式约定、不搬其它字体/填充/边框 —— 其余观感仍由美化那一步统一决定。
 
 各表落成 sheet 之后，落盘之前还有一步：
 
@@ -31,12 +45,12 @@ npm 依赖（SheetJS 社区版），顺带修掉它解决不了/悄悄丢掉的�
 > 在仓库里有两个形态。删掉之后交付物里保留平台原样 `172.101.226.10(未归类组)`。
 > 表格预处理现在只有一处 —— **下载之后、解析之前**（mssw_downloader.js 调
 > mssw_preprocess.js -> report_preprocess.preprocess_event_file，**原地改写下载件**，
-> 追加「内网外网资产」列与四个时长列）。用户口径 2026-10-12「取值层必须在预处理之后」
+> 追加「内网外网资产」列与五个时长列）。用户口径 2026-10-12「取值层必须在预处理之后」
 > 就是这条：那几列必须在 parse* 之前落到文件上，ctx 里的行对象才读得到。
 > **不能改到这里来跑**：那几步是往行末盲追加，引擎里跑会写出重名表头
 > （parse_table_rows.py 见到重名会抛错），而报告 sheet 已经是搬表搬进来的成品了。
 
-搬表读的是**磁盘上那个 xlsx**（`load_first_worksheet`），而下载件在解析之前就被改写过，
+搬表读的是**磁盘上那个 xlsx**（`load_source_workbook` / `pick_source_sheet`），而下载件在解析之前就被改写过，
 所以报告 sheet 会自动带上预处理追加的那几列 —— 不存在"两处拼接"。
 **搬表就是搬表**：报告里那些 sheet 与平台导出逐格相同，本文件不改任何一格表内容，
 谁要在合并阶段加一道"顺手清洗"，先想清楚人工核对时报告与取值层对不上会怎么样
@@ -50,8 +64,10 @@ npm 依赖（SheetJS 社区版），顺带修掉它解决不了/悄悄丢掉的�
 套统一视觉规范（宋体 + 深蓝表头 + 浅蓝底，主题见 excel_beautifier/themes）。
 
 用法:
-    python build_report.py '<payload_json>'      # 建议用 B64: 前缀过一遍中文路径，
-                                                 # 见 path_helper.js / _path_helper.py
+    python build_report.py '<payload>'           # 整包走 B64GZ:（gzip + base64），
+                                                 # 见 path_helper.js / _path_helper.py；
+                                                 # 纯 B64: 也认，但写入计划一长就会撞
+                                                 # Windows 32767 字符的命令行上限
 payload_json:
     {
       "template": "<模板 xlsx 绝对路径>",
@@ -90,6 +106,7 @@ payload_json:
 
 import datetime
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -113,24 +130,49 @@ from openpyxl.utils import get_column_letter
 from openpyxl.utils.datetime import to_excel
 
 from _path_helper import decode_argv
+from marker_colors import apply_marker_fill, marker_label, row_marker_color
 
 # 模板骨架（R3 + R3a）：缺任何一个都早失败，避免产出缺 sheet 的报告还看起来"成功"。
 # 顺序照抄 data.xlsx 模板的真实顺序（R3：sheet 顺序由模板定，代码不重排）。
 # 这份列表只用于「模板缺 sheet 就早失败」的存在性校验，顺序本身不参与决策。
-TEMPLATE_SHEETS = ['数据统计', '暴露面', '资产漏洞表', '资产表', '告警表', '事件表', '弱密码表']
+# 「资产漏洞表」2026-10-16 拆成「内网漏洞表」「互联网漏洞表」两个 sheet（位置仍在第 3、4）。
+# 「弱密码表」2026-10-19 拆成「内网弱密码表」「互联网弱密码表」（追加在末尾）。
+TEMPLATE_SHEETS = [
+    '数据统计', '暴露面', '内网漏洞表', '互联网漏洞表', '资产表', '告警表', '事件表',
+    '内网弱密码表', '互联网弱密码表',
+]
 
-# 表类型 -> 报告里的 sheet 名。
+# 表类型 -> [(源 sheet 名, 目标 sheet 名), ...]。
+#
+# 源 sheet 名为 None 表示「下载件的第一个 worksheet」（资产表那条老路径，不认名字）。
+# 一个下载件搬出**多张**报告 sheet 的只有漏洞表：2026-10-16 起平台把它拆成内网/外网两份
+# 报表，scripts/extract_vuln_report.py 把两份合进一个工作簿的两张同名 sheet，这里按名字搬两次。
+# 目标 sheet 名必须同时出现在 TEMPLATE_SHEETS 里（上面），否则数据.xlsx 会被这层写坏。
 TABLE_SHEET_NAMES = {
-    'asset': '资产表',
-    'alarm': '告警表',
-    'event': '事件表',
-    'vuln': '资产漏洞表',
-    'weakpwd': '弱密码表',
+    'asset': [(None, '资产表')],
+    'alarm': [(None, '告警表')],
+    'event': [(None, '事件表')],
+    'vuln': [('内网漏洞表', '内网漏洞表'), ('互联网漏洞表', '互联网漏洞表')],
+    'weakpwd': [(None, '内网弱密码表')],
+    # 2026-10-19：互联网弱密码表是**第二个下载件**（另一套端点与请求体），各搬一张。
+    'weakpwd_internet': [(None, '互联网弱密码表')],
+    # 六份总表的最后一份（2026-10-15 接入）。sheet 名照模板（R3 输出冻结），
+    # 与总表的中文名「暴露面表」差一个字。
+    'exposed': [(None, '暴露面')],
 }
 
 # 「数据统计」sheet：写入地址由 stats/write_statistics_sheet.js 决定（F2）。
 STATISTICS_SHEET = '数据统计'
 PERCENT_FORMAT = '0.00%'
+
+# 事件表搬进报告时要**剔掉**的中间列（用户口径 2026-10-14）。
+#
+# 这一列是 scripts/report_preprocess.py 的 `append_month_column` 追加给 C58:N59 分桶用的
+# 桶键（`2026-07` 形态），取值层要读它、报告上不要。列名在那边是常量
+# `CREATE_MONTH_COLUMN`，这里写的是**字面量** —— 与 stats/metrics/event.js 里
+# 「遏制时长」等几个列名同一套做法（跨语言、跨进程的两个脚本之间不同步引用，
+# 靠这条注释对上；改名要两处一起改）。
+DROP_EVENT_COLUMNS = ('事件创建月份',)
 
 # 列宽最小 10、最大 50，表头参与计算。
 MIN_COL_WIDTH = 10
@@ -182,21 +224,76 @@ def to_serial_number(value):
     return value
 
 
-def load_first_worksheet(file_path):
-    """读工作簿的第一个 worksheet（不认 sheet 名，与旧版一致）。"""
+def load_source_workbook(file_path):
+    """读一份平台导出的工作簿 -> workbook。
+
+    只做「打开」，不决定取哪张 sheet（那是 pick_source_sheet 的事）：漏洞表那个下载件
+    要一次打开、搬两张 sheet，分开两个函数才不必把同一个工作簿读两遍。
+
+    data_only=True：平台导出里若有公式，要的是**缓存值**，这与 SheetJS 的 cell.v 一致。
+    模板走 data_only=False（见 build_report），公式必须原样保住（R2 模板冻结）。
+    **普通模式，不是 read_only**：平台有 `<dimension ref="A1"/>` 声明不准的导出，
+    read_only 会只读到 A1（见 _path_helper.reset_read_only_dimensions 的说明）。
+    """
     if not file_path:
         raise ValueError('工作簿路径为空')
     path = Path(file_path)
     if not path.exists():
         raise ValueError(f'工作簿不存在: {file_path}')
 
-    # data_only=True：平台导出里若有公式，要的是**缓存值**，这与 SheetJS 的 cell.v 一致。
-    # 模板走 data_only=False（见 build_report），公式必须原样保住（R2 模板冻结）。
     workbook = load_workbook(path, data_only=True)
     if not workbook.sheetnames:
         raise ValueError(f'工作簿没有任何 sheet: {file_path}')
-    sheet_name = workbook.sheetnames[0]
-    return workbook, sheet_name, workbook[sheet_name]
+    return workbook
+
+
+# 平台导出里「空表」的 sheet 名后缀（全角括号 + 行数），见 pick_source_sheet。
+EXPORT_EMPTY_SHEET_SUFFIX = re.compile(r'（\d+）$')
+
+
+def pick_source_sheet(workbook, file_path, sheet_name=None):
+    """总表 workbook -> (实际 sheet 名, worksheet)。
+
+    sheet_name 为空时取第一个 worksheet（**不认 sheet 名**，与旧版行为一致：
+    资产表那份下载件就是这么取的）。给了名字就按名字取，名字找不到时**当场抛错、
+    并把现有 sheet 名列出来**。
+
+    为什么这里不能「名字对不上就退回第一个」：漏洞表 2026-10-16 起按名字取
+    「内网漏洞表」「互联网漏洞表」，而那个工作簿里两张 sheet 的列集本来就不同
+    （30 列 / 21 列）—— 静默退化会把外网表当内网表搬进报告，报告看起来完全正常。
+    """
+    if not sheet_name:
+        sheet_name = workbook.sheetnames[0]
+        return sheet_name, workbook[sheet_name]
+
+    if sheet_name in workbook.sheetnames:
+        return sheet_name, workbook[sheet_name]
+
+    # 平台导出里**空表**的 sheet 名会带一个「（0）」后缀（2026-10-20 实测：一致性验收客户
+    # 暴露面 13 张全空 ->「高危端口&服务（0）」；华能集团有数 ->「高危端口&服务」）。
+    # 去掉后缀后**唯一命中**才认；命中多张说明名字本身有歧义，照样报错。
+    suffixed = [
+        name for name in workbook.sheetnames
+        if EXPORT_EMPTY_SHEET_SUFFIX.sub('', name) == sheet_name
+    ]
+    if len(suffixed) == 1:
+        return suffixed[0], workbook[suffixed[0]]
+
+    raise ValueError(
+        f'总表里没有 sheet 「{sheet_name}」: {file_path}'
+        f'（现有: {"、".join(workbook.sheetnames)}）'
+    )
+
+
+def load_source_worksheet(file_path, sheet_name=None):
+    """读一份总表里的某个 worksheet -> (workbook, 实际 sheet 名, worksheet)。
+
+    单张 sheet 的调用方用这个（两件事一起做完）；要一个工作簿搬多张 sheet 的
+    调用方（build_report）自己走 load_source_workbook + pick_source_sheet。
+    """
+    workbook = load_source_workbook(file_path)
+    sheet_name, sheet = pick_source_sheet(workbook, file_path, sheet_name)
+    return workbook, sheet_name, sheet
 
 
 def compute_column_widths(rows):
@@ -236,6 +333,19 @@ def collect_source_rows(source_sheet):
 
     格式表与值表同一轮产出、同一批行，键就是「输出行,列」。
     """
+    return [
+        (values, formats)
+        for _row_number, values, formats in collect_source_rows_with_numbers(source_sheet)
+    ]
+
+
+def collect_source_rows_with_numbers(source_sheet):
+    """同 `collect_source_rows`，但每一行多带一个**源表物理行号**。
+
+    标记色行（见 marker_colors.py）要按源表行号对回输出行号，而 `collect_source_rows`
+    会把"整行没值"的行丢掉，输出行号与源行号不再相等 —— 所以行号必须与值同轮产出，
+    不能在别处再判一遍「哪些行算有值」（两处判空口径迟早对不上）。
+    """
     grid = {}
     for row in source_sheet.iter_rows():
         for cell in row:
@@ -257,7 +367,7 @@ def collect_source_rows(source_sheet):
             values.append(value)
             formats.append(number_format)
         if any(v is not None for v in values):
-            rows.append((values, formats))
+            rows.append((r, values, formats))
     return rows
 
 
@@ -333,16 +443,54 @@ def copy_sheet_verbatim(target_sheet, source_sheet):
     return first_row, data_rows
 
 
-def rebuild_sheet(target_sheet, source_sheet):
+def rebuild_sheet(target_sheet, source_sheet, drop_headers=()):
     """告警表 / 事件表：第 1 行表头 + 第 2 行起数据，列宽自适应，数字格式另还原。
 
     只给有值的格子盖格式：空格子套上日期格式，Excel 会把它当成 1900-01-00 显示。
 
-    :returns: (data_rows, restored_formats)
+    :param drop_headers 表头里要**剔掉**的列名（精确相等，先 strip 再比）。
+      给的是那种「取值层要用、报告上不要」的中间列 —— 眼下只有一个：
+      「事件创建月份」（C58:N59 分桶用的桶键，见 report_preprocess.py 的
+      `append_month_column`）。默认空 = 一列不剔。
+      ⚠️ 与「没算出来的那一列根本不建」是同一条思路的两面：报告上不该出现的列，
+      要么别写进下载件、要么在搬的这一处剔掉 —— 别指望下游看见它却假装没看见。
+      列宽是按**剔完**的列算的，不是按剔之前。
+
+    :returns: (data_rows, restored_formats, dropped_headers, marked_rows) —— 第三项是
+      **真剔掉的**列名（表里本来就没有那一列时是空列表，那不是异常：这一步没算出月份列
+      时就是这样）；第四项是搬完之后带标记色的行号（平台用整行粉红标「最近扫描新增
+      漏洞」，见 marker_colors.py），没有标记行时是空列表。
     """
-    rows = split_leading_blank_rows(collect_source_rows(source_sheet))
+    numbered = collect_source_rows_with_numbers(source_sheet)
+    rows = split_leading_blank_rows([(values, formats) for _r, values, formats in numbered])
     if not rows:
-        return 0, 0
+        return 0, 0, [], []
+
+    # 与 rows 同源同序：split_leading_blank_rows 只砍开头若干行，按长度差把行号对齐
+    numbered = numbered[len(numbered) - len(rows):]
+
+    dropped = []
+    if drop_headers:
+        wanted = {str(name).strip() for name in drop_headers}
+        header = [
+            str(value).strip() if value is not None else ''
+            for value in rows[0][0]
+        ]
+        indexes = [index for index, name in enumerate(header) if name in wanted]
+        if indexes:
+            dropped = [header[index] for index in indexes]
+            drop = set(indexes)
+            rows = [
+                ([value for index, value in enumerate(values) if index not in drop],
+                 [fmt for index, fmt in enumerate(formats) if index not in drop])
+                for values, formats in rows
+            ]
+            numbered = [
+                (row_number,
+                 [value for index, value in enumerate(values) if index not in drop],
+                 [fmt for index, fmt in enumerate(formats) if index not in drop])
+                for row_number, values, formats in numbered
+            ]
 
     values_rows = [values for values, _ in rows]
     formats_rows = [formats for _, formats in rows]
@@ -366,7 +514,19 @@ def rebuild_sheet(target_sheet, source_sheet):
                 cell.number_format = number_format
                 restored += 1
 
-    return len(values_rows) - 1, restored
+    # 标记色行透传（用户口径 2026-10-30）：平台用整行粉红标「最近扫描新增漏洞」，
+    # 那是平台写在表头里的显式约定，不是样式噪声 —— 搬表时丢了，报告上就再也看不出来。
+    # 表头行不参与判定；输出行号 = 该行在 numbered 里的位置（表头固定是第 1 行）。
+    marked_rows = []
+    column_count = len(widths)
+    for output_row, (source_row, _values, _formats) in enumerate(numbered[1:], start=2):
+        color = row_marker_color(source_sheet, source_row)
+        if not color:
+            continue
+        apply_marker_fill(target_sheet, output_row, 1, column_count, color)
+        marked_rows.append(output_row)
+
+    return len(values_rows) - 1, restored, dropped, marked_rows
 
 
 # ---------------------------------------------------------------------------
@@ -427,53 +587,71 @@ def build_report(payload, logs=None):
 
     sheets = []
 
-    for table_type, sheet_name in TABLE_SHEET_NAMES.items():
+    for table_type, sheet_pairs in TABLE_SHEET_NAMES.items():
         table = tables.get(table_type)
         if not table or not table.get('filePath'):
-            raise ValueError(f'缺少 {sheet_name} 的下载结果，无法生成报告')
+            targets = '、'.join(target for _source, target in sheet_pairs)
+            raise ValueError(f'缺少 {targets} 的下载结果，无法生成报告')
 
         source_path = table['filePath']
-        _source_workbook, source_sheet_name, source_sheet = load_first_worksheet(source_path)
         source_base = Path(source_path).name
-        target_sheet = workbook[sheet_name]
-        reset_sheet(target_sheet)
+        # 一个下载件搬出的第 N 张 sheet 都要重新在**同一个工作簿**里取（漏洞表那两份就
+        # 落在同一个工作簿的两张 sheet 上）—— 所以工作簿在循环外只打开一次。
+        source_workbook = load_source_workbook(source_path)
 
-        if table_type == 'asset':
-            # 原样搬入：连首行空行与平台导出格式一起保留
-            header_row, data_rows = copy_sheet_verbatim(target_sheet, source_sheet)
+        for source_name, sheet_name in sheet_pairs:
+            source_sheet_name, source_sheet = pick_source_sheet(
+                source_workbook, source_path, source_name
+            )
+            target_sheet = workbook[sheet_name]
+            reset_sheet(target_sheet)
+
+            if table_type == 'asset':
+                # 原样搬入：连首行空行与平台导出格式一起保留
+                header_row, data_rows = copy_sheet_verbatim(target_sheet, source_sheet)
+                logs.append(
+                    f'[报告] {sheet_name} <- {source_base} '
+                    f'(sheet "{source_sheet_name}", 原样搬入, {data_rows} 行数据'
+                    + (f'，含第 {header_row} 行起的表头' if data_rows else '')
+                    + ')'
+                )
+                sheets.append({
+                    'name': sheet_name,
+                    'rowCount': data_rows,
+                    'mode': 'verbatim',
+                    'source': source_base,
+                    'sourceSheet': source_sheet_name,
+                })
+                continue
+
+            # 「事件创建月份」只在事件表上剔：它是 C58:N59 分桶用的桶键，取值层要读它，
+            # 交付物的「事件表」sheet 上不要（用户口径 2026-10-14）。五个时长列照旧保留 ——
+            # 它们是既有交付物形态的一部分。
+            dropped_headers = DROP_EVENT_COLUMNS if table_type == 'event' else ()
+            data_rows, restored, dropped, marked_rows = rebuild_sheet(
+                target_sheet, source_sheet, dropped_headers
+            )
+            if data_rows <= 0:
+                # 空表也是有效结果（该时间段确实没有数据），但要说清楚，不静默
+                logs.append(f'[报告] {sheet_name} 源文件无数据行: {source_base}')
             logs.append(
                 f'[报告] {sheet_name} <- {source_base} '
-                f'(sheet "{source_sheet_name}", 原样搬入, {data_rows} 行数据'
-                + (f'，含第 {header_row} 行起的表头' if data_rows else '')
+                f'(sheet "{source_sheet_name}", 表头第 1 行 + {data_rows} 行数据'
+                + (f'，还原 {restored} 个单元格格式' if restored else '')
+                + (f'，剔掉中间列 {"、".join(f"「{name}」" for name in dropped)}' if dropped else '')
+                + (f'，透传标记色行 {len(marked_rows)} 行' if marked_rows else '')
                 + ')'
             )
             sheets.append({
                 'name': sheet_name,
                 'rowCount': data_rows,
-                'mode': 'verbatim',
+                'mode': 'rebuild',
                 'source': source_base,
                 'sourceSheet': source_sheet_name,
+                'restoredFormats': restored,
+                'droppedColumns': dropped,
+                'markedRows': marked_rows,
             })
-            continue
-
-        data_rows, restored = rebuild_sheet(target_sheet, source_sheet)
-        if data_rows <= 0:
-            # 空表也是有效结果（该时间段确实没有数据），但要说清楚，不静默
-            logs.append(f'[报告] {sheet_name} 源文件无数据行: {source_base}')
-        logs.append(
-            f'[报告] {sheet_name} <- {source_base} '
-            f'(表头第 1 行 + {data_rows} 行数据'
-            + (f'，还原 {restored} 个单元格格式' if restored else '')
-            + ')'
-        )
-        sheets.append({
-            'name': sheet_name,
-            'rowCount': data_rows,
-            'mode': 'rebuild',
-            'source': source_base,
-            'sourceSheet': source_sheet_name,
-            'restoredFormats': restored,
-        })
 
     # 「数据统计」sheet 的取值层。writes 缺席时不写任何格子（M1 行为，模板原样）——
     # 这是刻意的默认值，让「没接 ctx」和「口径未定」两种情况都表现为「模板保持原样」。

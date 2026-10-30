@@ -1,15 +1,21 @@
 # -*- coding: utf-8 -*-
 """跨语言参数传递的 B64 编解码。
 
-线上格式与仓库既有的两个文件**必须完全一致**（`path_helper.js` 的 encodePath、
-`scripts/_path_helper.py` 的 decode_arg）：
+线上格式与仓库既有的两个文件**必须完全一致**（`path_helper.js` 的 encodePath /
+encodePayload、`scripts/_path_helper.py` 的 decode_arg）：
 
-    'B64:' + base64(utf-8 原文)
+    'B64:'   + base64(utf-8 原文)        # 单个路径 / 短字符串
+    'B64GZ:' + base64(gzip(utf-8 原文))  # JSON payload
 
 为什么把**整个请求**编码，而不是只编码路径：pipeline.js 传给 python 的是一个
 含中文客户名、中文 prompt、Windows 绝对路径的 JSON。走裸命令行会被三层撕咬 ——
 cmd 的引号规则、GBK 控制台编码、args.js 里「值以 -- 开头就当成布尔」的边角。
-整包 B64 一次免疫全部，代价只是 base64 后长一点。
+整包 B64 一次免疫全部。
+
+为什么 payload 再压一层 gzip：Windows 命令行上限 32767 字符，超了 Node 的 execFile
+会同步抛 `spawn ENAMETOOLONG`（stderr 为空，日志里只剩一句裸消息，看不出是哪一步）。
+2026-10-29 实测「数据统计」写入计划 base64 后正好压在 32K 线上，报告期一变就随机挂掉。
+纯 ASCII 的 JSON 压一遍通常只剩 1/5 ~ 1/8。
 
 这里刻意**不 import** `scripts/_path_helper.py`：那会给 pptgen 引入一个对
 scripts/ 目录布局的依赖，而这个函数只有三行。前缀常量是两边唯一需要同步的东西，
@@ -17,13 +23,21 @@ scripts/ 目录布局的依赖，而这个函数只有三行。前缀常量是�
 """
 
 import base64
+import gzip
 import json
 
 B64_PREFIX = "B64:"
+B64GZ_PREFIX = "B64GZ:"
 
 
 def decode_arg(value):
-    """解一个 B64: 开头的参数；不是则原样返回。与 scripts/_path_helper.py 同语义。"""
+    """解 B64: / B64GZ: 开头的参数；都不是则原样返回。与 scripts/_path_helper.py 同语义。"""
+    if isinstance(value, str) and value.startswith(B64GZ_PREFIX):
+        try:
+            return gzip.decompress(
+                base64.b64decode(value[len(B64GZ_PREFIX):])).decode("utf-8")
+        except Exception:
+            return value
     if isinstance(value, str) and value.startswith(B64_PREFIX):
         try:
             return base64.b64decode(value[len(B64_PREFIX):]).decode("utf-8")

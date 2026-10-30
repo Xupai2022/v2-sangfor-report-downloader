@@ -934,7 +934,7 @@ class ExcelDataExtractor:
         threat_operation_overview: Dict[str, Any] = {}
         ExcelDataExtractor._put_text(threat_operation_overview, "af_count", ws["D101"])
         ExcelDataExtractor._put_text(threat_operation_overview, "sta_count", ws["D102"])
-        ExcelDataExtractor._put_text(threat_operation_overview, "aes_count", ws["D105"])
+        ExcelDataExtractor._put_text(threat_operation_overview, "aes_count", ws["D104"])
         threat_operation_overview_map = {
             "xdr_log_count": "G99",
             "xdr_alert_count": "G100",

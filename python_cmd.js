@@ -85,6 +85,33 @@ function isInterpreterSpawnError(error) {
 }
 
 /**
+ * Windows 命令行上限（CreateProcess 的 32767 字符）。
+ *
+ * 撞上时 Node 的 execFile 会**同步**抛 `spawn ENAMETOOLONG`（不是走 callback），
+ * stderr 为空 —— 调用方拿到的只有这一句裸消息，日志里完全看不出是哪一步挂了。
+ * 2026-10-29 就是「合并」那步的写入计划 base64 之后正好压在这条线上。
+ */
+const WINDOWS_CMDLINE_LIMIT = 32767;
+
+/**
+ * 给 ENAMETOOLONG 补一句能定位的话（脚本名 + 约多少字符）。
+ *
+ * 只改 message，`code` 原样保留 —— 重试判定（isInterpreterMissing 等）都按 code 走，
+ * 这里不能再造一个新错误把 code 丢了。
+ */
+function annotateCommandLineError(error, cmd, scriptPath, args) {
+  if (!error || error.code !== 'ENAMETOOLONG') {
+    return error;
+  }
+  const total = [cmd, scriptPath, ...args]
+    .reduce((sum, item) => sum + String(item).length + 3, 0);
+  error.message = `命令行超长（约 ${total} 字符，超过 Windows 上限 ${WINDOWS_CMDLINE_LIMIT}）`
+    + `脚本: ${scriptPath}。JSON payload 要用 encodePayload（B64GZ: 前缀，gzip 后传），`
+    + '不要用 encodePath 直接塞原始 JSON';
+  return error;
+}
+
+/**
  * 跑一个 Python 脚本，按候选逐个试，返回第一个跑通的结果。
  *
  * 给"一次性拿完整 stdout"的调用方用（美化报告、删事件行）；需要实时转发日志的
@@ -105,7 +132,7 @@ function execFilePython(scriptPath, args, options = {}) {
   return new Promise((resolvePromise, rejectPromise) => {
     const attempt = (index) => {
       const cmd = list[index];
-      execFile(cmd, [scriptPath, ...args], execOptions, (error, stdout, stderr) => {
+      const handle = (error, stdout, stderr) => {
         if (!error) {
           resolvePromise({ stdout: String(stdout || ''), stderr: String(stderr || ''), python: cmd });
           return;
@@ -126,7 +153,15 @@ function execFilePython(scriptPath, args, options = {}) {
         failure.python = cmd;
         failure.tried = list.slice(0, index + 1);
         rejectPromise(failure);
-      });
+      };
+
+      try {
+        execFile(cmd, [scriptPath, ...args], execOptions, handle);
+      } catch (error) {
+        // 命令行超长在 Windows 上是**同步**抛的（走不到 callback）：先补清楚文案，
+        // 再交回同一套判定，免得只留一句看不出所以然的 `spawn ENAMETOOLONG`。
+        handle(annotateCommandLineError(error, cmd, scriptPath, args), '', '');
+      }
     };
     attempt(0);
   });

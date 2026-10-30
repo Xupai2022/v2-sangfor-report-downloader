@@ -221,12 +221,12 @@ npm run verify:write     # 写入层语义必须全通过
 
 ```js
 {
-  addr: 'G100',
-  label: '报告期告警表统计',
-  desc: '报告期内，告警表总表中符合……（待补）',
+  addr: 'G103',
+  label: '已处置非白名单事件',
+  desc: '',
+  verify: '',
   mode: 'unresolved',
-  note: '口径未定：需要确认「告警表统计」具体指哪些行、是否排除白名单',
-  verify: ''
+  note: 'M1 骨架，口径待定（见 CELL_REGISTRY.md）'
 }
 ```
 

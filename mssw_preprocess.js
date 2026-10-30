@@ -4,18 +4,23 @@
  * 事件表预处理层 —— 「下载之后、解析之前」那一步。
  *
  * **用户口径（2026-10-12）：取值层必须在预处理之后。** 也就是说 ctx 里的行对象要能
- * 直接读到预处理追加出来的列（眼下是「内网外网资产」与四个时长列），所以这几步只能在
- * `parse*` **之前**落到下载件上，不能等到合并报告的时候。
+ * 直接读到预处理追加出来的列（眼下是「内网外网资产」、五个时长列，以及 2026-10-14 追加的
+ * 「事件创建月份」），所以这几步只能在 `parse*` **之前**落到下载件上，不能等到合并报告的时候。
  *
  * 实际干活的是 scripts/report_preprocess.py 的 `preprocess_event_file`，本文件只负责
  * 拉起它、把结果与错误翻译成人话 —— 与 mssw_parser.js 和 parse_table_rows.py 的分工同款。
  *
- * 跑的是三步（第 1 步建映射 + 第 2 步追加「内网外网资产」+ 第 4 步追加四个时长列）。
- * 从前还有一步「告警表『主机IP』剥括号后缀」留在合并报告时跑，2026-10-12 已删除 ——
- * 表格预处理现在**只有这一处**。
+ * 跑的是四步（第 1 步建映射 + 第 2 步追加「内网外网资产」+ 第 4 步追加五个时长列
+ * + 第 5 步追加「事件创建月份」）。从前还有一步「告警表『主机IP』剥括号后缀」留在合并
+ * 报告时跑，2026-10-12 已删除 —— 表格预处理现在**只有这一处**。
+ *
+ * ⚠️ 第 4 条的五个时长列**逐列独立**（用户口径 2026-10-12「不要因为一个影响别的时间计算」）：
+ * 一列时长只看自己那两个源列在不在，缺一个只停它自己那一列 —— 「事件遏制时间」缺席时
+ * 「识别时长 / 处置时长 / 响应时长 / 闭环时长」照建照算（G9 因此照常落值）。所以 `duration`
+ * 不能只看 `status`：**算了哪几列看 `addedNames`，没算哪几列、各缺哪一列看 `blocked`**。
  *
  * ⚠️ **事件表下载件是原地改写的**（与 scripts/remove_rows_by_status.py 同款做法）：
- * 跑完之后磁盘上那个 xlsx 就多了那五列，sheet 名与其余内容不变。
+ * 跑完之后磁盘上那个 xlsx 就多了那七列，sheet 名与其余内容不变。
  * 所以本函数对同一份文件**不是**「跑几次都一样」的自由操作 —— 虽然 Python 侧加了幂等闸
  * （列已经在表头里就跳过，不会追加出重名列），但重复跑是多花一次整本读写。
  */
@@ -23,7 +28,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { encodePath } = require('./path_helper');
+const { encodePayload } = require('./path_helper');
 const pythonCmd = require('./python_cmd');
 const workdir = require('./workdir');
 
@@ -70,15 +75,15 @@ function preprocessFailure(error) {
 }
 
 /**
- * 事件表预处理：资产表建映射 -> 事件表原地追加「内网外网资产」+ 四个时长列。
+ * 事件表预处理：资产表建映射 -> 事件表原地追加「内网外网资产」+ 五个时长列 + 「事件创建月份」。
  *
  * @param {Object} options
  * @param {string} [options.assetPath] 资产表下载结果（prepare_asset_table 加工过的那个）。
  *   为空 = 「这次没有资产表」：不建映射，事件表所有有 IP 的行都标「不在资产表」。
  * @param {string} options.eventPath 事件表下载结果（**会被原地改写**）
  * @returns {Promise<{ran: boolean, asset: Object, event: Object, duration: Object,
- *   logs: string[]}>}
- *   `event` / `duration` 里带那一列的落点与取值分布，原样可以塞进 buildReport 的
+ *   month: Object, logs: string[]}>}
+ *   `event` / `duration` / `month` 里带那一列的落点与取值分布，原样可以塞进 buildReport 的
  *   `preprocess` 选项（它并进返回值，好让一条日志链把「预处理跑了什么」讲全）。
  * @throws {Error} 脚本缺失 / 解释器起不来 / 事件表路径为空 / 工作簿里已有同名 sheet
  */
@@ -97,7 +102,7 @@ function runPreprocess({ assetPath, eventPath } = {}) {
   };
 
   return pythonCmd
-    .execFilePython(PREPROCESS_SCRIPT, [encodePath(JSON.stringify(payload))], PYTHON_OPTIONS)
+    .execFilePython(PREPROCESS_SCRIPT, [encodePayload(payload)], PYTHON_OPTIONS)
     .then((result) => {
       let parsed;
       try {
@@ -106,7 +111,7 @@ function runPreprocess({ assetPath, eventPath } = {}) {
         throw new Error(`预处理脚本输出无法解析: ${result.stdout}`);
       }
       // 形状对不上就当契约破了，早说 —— 少一个字段会让下游静默走缺数分支
-      const missing = ['ran', 'asset', 'event', 'duration']
+      const missing = ['ran', 'asset', 'event', 'duration', 'month']
         .filter((key) => parsed[key] === undefined);
       if (missing.length) {
         throw new Error(`预处理脚本返回的 JSON 缺字段: ${missing.join('、')}`);

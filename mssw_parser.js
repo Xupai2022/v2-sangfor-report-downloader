@@ -18,11 +18,20 @@
 const fs = require('fs');
 const path = require('path');
 
-const { encodePath } = require('./path_helper');
+const { encodePayload } = require('./path_helper');
 const pythonCmd = require('./python_cmd');
 const workdir = require('./workdir');
 
 const PARSE_SCRIPT = path.join(__dirname, 'scripts', 'parse_table_rows.py');
+
+/**
+ * 暴露面表「文档说明」专用的读取脚本 —— 与上面的通用读表器分开。
+ *
+ * 那份 sheet 不是「第一行就是表头」的规整表：标题、基本信息占住上半张，
+ * 汇总表从第 15 行才开始。用通用读表器会把标题行当表头，所以按投喂口径
+ * 「逐格找子类型文字、取右侧一格」另走一条（见 scripts/parse_exposed_summary.py）。
+ */
+const PARSE_EXPOSED_SUMMARY_SCRIPT = path.join(__dirname, 'scripts', 'parse_exposed_summary.py');
 
 /**
  * 与 report_writer.js 的 PYTHON_OPTIONS 同款。
@@ -66,7 +75,11 @@ function parseFailure(error) {
  * @param {Object} [options]
  * @param {string[]} [options.columns] 要读的列（**强烈建议给**）。省略 = 全部具名列，
  *   大表会撞 maxBuffer —— 告警导出没有行数上限，63 列全量回传能到几十 MB。
- * @param {string} [options.sheet] sheet 名，默认第一个 worksheet
+ * @param {string|string[]} [options.sheet] sheet 名，默认第一个 worksheet。
+ *   传**数组**时逐张按同一份 columns 白名单读、行顺序拼接成**一个**行数组
+ *   （漏洞表 2026-10-16 起：一个下载件里「内网漏洞表」「互联网漏洞表」两张，
+ *   而「全表」的口径就是两份相加）—— 调用方拿到手仍是单个数组，
+ *   见 scripts/parse_table_rows.py 头注。
  * @returns {Promise<{sheet: string, header: string[], rowCount: number,
  *   rows: Array<Object>, missingColumns: string[], unnamedColumns: number}>}
  * @throws {Error} 表不存在 / 列重名 / 解释器起不来。**读不出来一律抛，不返回空数组** ——
@@ -89,7 +102,7 @@ function parseTableRows(filePath, options = {}) {
   };
 
   return pythonCmd
-    .execFilePython(PARSE_SCRIPT, [encodePath(JSON.stringify(payload))], PYTHON_OPTIONS)
+    .execFilePython(PARSE_SCRIPT, [encodePayload(payload)], PYTHON_OPTIONS)
     .then((result) => {
       let parsed;
       try {
@@ -109,4 +122,71 @@ function parseTableRows(filePath, options = {}) {
     });
 }
 
-module.exports = { parseTableRows, PARSE_SCRIPT };
+/**
+ * 读暴露面表「文档说明」sheet -> 汇总行对象数组（D128 的口径源）。
+ *
+ * 与 parseTableRows 是**两个**读表器，原因写在 PARSE_EXPOSED_SUMMARY_SCRIPT 的注释里：
+ * 那份 sheet 的表头不在第 1 行。返回值：
+ *
+ *   { sheet, header: ['子类型', '总数'], rowCount, rows: [{子类型, 总数}],
+ *     missingLabels, duplicateLabels, invalidLabels }
+ *
+ * **失败语义与 parseTableRows 相同**：文件 / sheet 不存在、一个子类型都找不到时抛错，
+ * 不返回空数组糊过去（R10）。部分缺失 / 重复 / 右侧不是数字**不抛**，交给取值层
+ * （stats/metrics/exposed.js）按行对象判、记进那一格的错误列表 —— 与「缺列」同档。
+ *
+ * @param {string} filePath 暴露面表下载件路径
+ * @param {Object} options
+ * @param {string} [options.sheet] sheet 名，默认「文档说明」
+ * @param {string[]} options.labels 要定位的子类型文字（权威在 stats/metrics/exposed.js）
+ * @param {'exact'|'contains'} [options.match] 文字判据，默认 exact；contains 用于
+ *   I79/I80 那种「找包含某段文字的单元格」的口径（同样是取右侧一格）
+ */
+function parseExposedSummary(filePath, options = {}) {
+  if (!filePath) {
+    return Promise.reject(new Error('暴露面表路径为空'));
+  }
+  if (!fs.existsSync(PARSE_EXPOSED_SUMMARY_SCRIPT)) {
+    return Promise.reject(new Error(`读表脚本不存在: ${PARSE_EXPOSED_SUMMARY_SCRIPT}`));
+  }
+
+  // labels 必须由调用方给：清单的权威在 stats/metrics/exposed.js，不在 Python 里写第二份。
+  if (!Array.isArray(options.labels) || options.labels.length === 0) {
+    return Promise.reject(new Error('parseExposedSummary 缺少 labels（子类型清单）'));
+  }
+  const match = options.match === undefined ? 'exact' : options.match;
+  if (match !== 'exact' && match !== 'contains') {
+    return Promise.reject(new Error(`parseExposedSummary 的 match 只能是 exact / contains，收到: ${match}`));
+  }
+
+  const payload = {
+    path: filePath,
+    sheet: options.sheet || null,
+    labels: options.labels,
+    match
+  };
+
+  return pythonCmd
+    .execFilePython(PARSE_EXPOSED_SUMMARY_SCRIPT, [encodePayload(payload)], PYTHON_OPTIONS)
+    .then((result) => {
+      let parsed;
+      try {
+        parsed = JSON.parse(String(result.stdout).trim());
+      } catch (parseError) {
+        throw new Error(`暴露面汇总读取脚本输出无法解析: ${result.stdout}`);
+      }
+      // 形状对不上就当契约破了，早说 —— 少一个字段会让下游静默走缺数分支
+      const missing = ['sheet', 'header', 'rowCount', 'rows',
+                       'missingLabels', 'duplicateLabels', 'invalidLabels']
+        .filter((key) => parsed[key] === undefined);
+      if (missing.length) {
+        throw new Error(`暴露面汇总读取脚本返回的 JSON 缺字段: ${missing.join('、')}`);
+      }
+      return parsed;
+    }, (error) => {
+      throw parseFailure(error);
+    });
+}
+
+module.exports = { parseTableRows, parseExposedSummary, PARSE_SCRIPT,
+                   PARSE_EXPOSED_SUMMARY_SCRIPT };

@@ -11,9 +11,11 @@
 
 ## 入参两个通道
 
-- `--payload "B64:<base64(JSON)>"`：pipeline.js 的通道。整包编码，一次免疫中文
+- `--payload "B64GZ:<base64(gzip(JSON))>"`：pipeline.js 的通道。整包编码，一次免疫中文
   路径、中文 prompt、引号、空格、反斜杠，也绕开 `args.js` 里「值以 `--` 开头会被
-  当布尔」的边角。**payload 的值优先于同名命令行参数**（Node 是权威调用方）。
+  当布尔」的边角。压一层 gzip 是为了不撞 Windows 32767 字符的命令行上限
+  （超了 Node 会同步抛 `spawn ENAMETOOLONG`，stderr 为空、看不出是哪一步）。
+  **payload 的值优先于同名命令行参数**（Node 是权威调用方）。
 - 显式命令行参数：给人手工跑、排查用。两个通道共用同一套 `_pick` 取值，
   所以不存在「Node 能设、手工设不了」的参数。
 
@@ -416,7 +418,7 @@ def _force_utf8():
 
 
 def _add_common(parser):
-    parser.add_argument("--payload", help="B64:<base64(JSON)>，pipeline.js 的整包入参通道")
+    parser.add_argument("--payload", help="B64GZ:<base64(gzip(JSON))>（也认 B64:），pipeline.js 的整包入参通道")
     parser.add_argument("--json", action="store_true",
                         help="无副作用（stdout 本来就只出 JSON）；为了与 node 侧命令对称而保留")
     parser.add_argument("--quiet", action="store_true", help="不打人读汇总（stderr）")

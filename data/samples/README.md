@@ -16,9 +16,15 @@
 | `asset.xlsx` | `assetRows` | 资产表 sheet + IP→安全域映射 + 业务系统统计 |
 | `event.xlsx` | `eventRows` | 事件表 sheet |
 | `alarm.xlsx` | `alarmRows` | 告警表 sheet |
-| `vuln.xlsx` | `vulnRows` | 资产漏洞表 sheet |
+| `vuln.xlsx` | `vulnRows` | 内网漏洞表 + 互联网漏洞表**两张** sheet（2026-10-16 起） |
 | `weakpwd.xlsx` | `weakPwdRows` | 弱密码表 sheet（R3a） |
 | `exposed.xlsx` | `exposedRows` | 暴露面 sheet |
+
+> `vuln.xlsx` 这份样本自 2026-10-16 起要按**新的下载形态**给：平台把漏洞表拆成内网 / 外网
+> 两份报表、下载产物是 **zip**，本仓解包后各取一份里那个 `4-漏洞清单+跟踪记录` sheet。
+> 所以这里的样本请给**解包后的 xlsx**（两份里任一，或两份拼一张、表头都在），
+> 列名与平台逐字一致就行 —— 报告上那两张 sheet 用的是同一批列名（实测 30 / 21 列，
+> 两份**不做并集对齐**）。
 
 要求：
 

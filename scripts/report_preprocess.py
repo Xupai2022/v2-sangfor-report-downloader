@@ -18,8 +18,13 @@
   1. 资产表：精确读「IP地址」+「互联网暴露」两列，建 IP -> 内网/外网/未知 映射
   2. 事件表：逐行（表头除外）取「影响资产」的 IP，查映射，在行末尾追加
      「内网外网资产」这一列填进去；查不到填「不在资产表」
-  4. 事件表：精确取五个时间列，两两做减法，在**第 2 步那列右边**再追加四个时长列
-     「遏制时长」「识别时长」「处置时长」「响应时长」（分钟数，2 位小数；用户 2026-10-10 口径）
+  4. 事件表：精确取五个时间列，两两做减法，在**第 2 步那列右边**再追加五个时长列
+     「遏制时长」「识别时长」「处置时长」「响应时长」「闭环时长」
+     （分钟数，2 位小数；前四条是用户 2026-10-10 口径，第五条「闭环时长」是 2026-10-13 追加的
+     —— 算式与源列**与「处置时长」完全相同**，是用户点名要的那一列）。
+     ⚠️ 这五列**逐列独立**（用户 2026-10-12：「不要因为一个影响别的时间计算」）：
+     一列时长只看它自己那两个源列在不在 —— 「事件遏制时间」缺席只停「遏制时长」，
+     另外四列照建照算（从前是五个源列缺一个就四列全不追加）。
 
   ⚠️ 曾经的**第 3 步（告警表剥「主机IP」的括号后缀）已于 2026-10-12 删除**（用户决定）：
   它对取值毫无影响（取值层的 normalizeIp 自己会剥，见 stats/metrics/alarm.js），
@@ -35,13 +40,16 @@
   - **空表** -> 不抛错（该时间段确实没数据是合法状态），记 status 并在日志里说明。
   - 映射为空（资产表没数据）-> 不抛错，但日志明确告警：事件表所有行都会标成「不在资产表」。
   - 第 4 步的**缺列不抛错**，理由见 append_duration_columns 头注：那五个时间列是平台近版
-    才有的列，客户环境里可能一行都不带，为它把整份报告打掉不值当。
+    才有的列，客户环境里可能一行都不带，为它把整份报告打掉不值当。且**只停缺的那一列**
+    （逐列独立，用户口径 2026-10-12）—— 缺「事件遏制时间」不停「识别时长 / 处置时长 / 响应时长 / 闭环时长」。
     ⚠️ 这一步不报错 ≠ 下游没事：G7「威胁平均遏制时间」读的就是这一步追加出来的
     「遏制时长」列（见 stats/metrics/event.js 的 averageContainedMinutes）——
     这一列没加上时，G7 会**不写值 + 记错误**，而不是被悄悄数成 0。
+    ⚠️ 反过来，「这一列没算」只影响它自己的读者：G9「事件平均响应时长」读的是「响应时长」，
+    与「事件遏制时间」无关 —— 那一列缺席时 G9 照常落值。
 
 ⚠️ 第 2 步与第 4 步都**不是幂等的**（新列一律追加在使用范围的右边界 +1），所以本文件
-自带一道**幂等闸**：目标表头里已经有「内网外网资产」/ 那四个时长列名时直接跳过、
+自带一道**幂等闸**：目标表头里已经有「内网外网资产」/ 那五个时长列名时直接跳过、
 不重复追加。没有这道闸，同一份下载件被处理两次就会写出重名表头 —— 而
 parse_table_rows.py 见到重名表头会抛错，错误现场离病根很远。
 
@@ -87,8 +95,9 @@ EVENT_SHEET_NAME = '事件表'
 IMPACT_HEADER = '影响资产'
 NEW_HEADER = '内网外网资产'
 
-# --- 第 4 步：事件表四个时长列的列名（新列名 / 被减数 / 减数）-----------------
-# 五个源列名与四个新列名都是**用户 2026-10-10 投喂的口径**，逐个精确取，不按子串匹配。
+# --- 第 4 步：事件表五个时长列的列名（新列名 / 被减数 / 减数）-----------------
+# 五个源列名与五个新列名都是**用户投喂的口径**（2026-10-10 前四条、2026-10-13 加第五条），
+# 逐个精确取，不按子串匹配。
 # 「遏制时长」这个新列名另有一处下游读者：G7「威胁平均遏制时间」
 # （stats/metrics/event.js 的 averageContainedMinutes 直接读 ctx 里的这一列）——
 # 本文件的常量是列名的唯一出处，那边写的是字面量，改名要两处一起改。
@@ -99,14 +108,18 @@ CONTAINED_HEADER = '事件遏制时间'
 EXPERT_HEADER = '专家研判时间'
 
 # 顺序即追加到事件表末尾的列顺序（第 2 步的「内网外网资产」之后）。
-# 同一对时间列可以被两个新列复用（「事件创建时间」既是识别时长的被减数、也是处置时长的减数；
-# 「组件检出时间」是识别与响应的减数，「专家研判时间」是遏制与响应的减/被减数），
+# 同一对时间列可以被两个新列复用（「事件创建时间」既是识别时长的被减数、也是处置时长与
+# 闭环时长的减数；「组件检出时间」是识别与响应的减数，「专家研判时间」是遏制与响应的减/被减数），
 # 所以这里描述的是「对」而不是「列清单」。
 DURATION_COLUMNS = (
     ('遏制时长', CONTAINED_HEADER, EXPERT_HEADER),      # 事件遏制时间 - 专家研判时间
     ('识别时长', CREATED_HEADER, CHECKOUT_HEADER),      # 事件创建时间 - 组件检出时间
     ('处置时长', CLOSED_LOOP_HEADER, CREATED_HEADER),   # 事件闭环时间 - 事件创建时间
     ('响应时长', EXPERT_HEADER, CHECKOUT_HEADER),       # 专家研判时间 - 组件检出时间
+    # 用户口径 2026-10-13：「在末尾再追加一列叫闭环时长，计算方式跟处置时长一样」。
+    # ⚠️ 与「处置时长」**算式与源列完全相同**（同一个被减数、同一个减数），是刻意保留的
+    # 同名不同列 —— 那两条算式里随便改一条，这一列必须跟着看（两列取值应当恒等）。
+    ('闭环时长', CLOSED_LOOP_HEADER, CREATED_HEADER),   # 事件闭环时间 - 事件创建时间
 )
 
 # 第 4 步用到的五个源列（去重后），缺任何一个都算「这一列算不出来」。
@@ -114,12 +127,32 @@ DURATION_SOURCE_HEADERS = tuple(
     dict.fromkeys(header for _, left, right in DURATION_COLUMNS for header in (left, right))
 )
 
+# --- 第 5 步：事件表追加「事件创建月份」列（用户口径 2026-10-14）-----------------
+# C58:N59「按月平均响应时长」要按月分桶：报告期切出 12 个槽位，读事件表「事件创建时间」，
+# 落在哪个月就把该行的「响应时长」计进那个月、取非空均值。
+#
+# ⚠️ 「时间格 -> 年月」**只在这一处解析**（与时长列同一条理由）：平台的时间格有
+# datetime / 带日期格式的裸序列号 / 两种文本形态，只有 parse_time_cell 三种全认。
+# 交给 JS 取值层解析就等于把那份「三种形态」的知识抄第二遍，且 JS 侧连日期解析器都没有。
+# 取值层只做「分桶 + 求均值 + 越界槽位留空」。
+#
+# ⚠️ 源列**复用 CREATED_HEADER**（第 4 步已经在读它），不另起一个同义常量 ——
+# 本文件里列名的出处只有一处。
+# ⚠️ 这一列**不进交付物**：scripts/build_report.py 把事件表合并进报告时会把它剥掉
+# （取值层要用、报告上不要）。五个时长列照旧保留，它们是既有交付物形态的一部分。
+CREATE_MONTH_COLUMN = '事件创建月份'
+
 # 平台导出的时间戳形态：实测 `2026-07-22 10:09:39`（60xx 行 100% 是这个形态）。
 # 秒缺失的 `2026-07-22 10:09` 也收 —— 拼第二个格式的代价只是多一次 try，
 # 而写进表里的都是分钟的差值，两种形态算出来的是同一个量。
 # **不猜别的写法**（`2026/07/22`、`07-22` 之类）：解析不出来就留空 + 记数报到日志，
 # 按「猜一个日期」写进交付物比留空糟得多。
 TIME_FORMATS = ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M')
+
+# 「事件创建月份」写进表里的形态：`2026-07`（用户口径 2026-10-14 原话「月份标签写 2026-07」）。
+# ⚠️ 短横，不是斜杠 —— 与 periods.js 的 `formatReportDate`（YYYY/MM/DD 斜杠）**刻意不同**：
+# 那是报告上给人看的日期，这是取数用的桶键。别顺手统一。
+MONTH_LABEL_FORMAT = '{year:04d}-{month:02d}'
 
 # 平台拿横杠当「无 / 不适用」的占位符（用户口径：这种代表空值，跳过）。
 # 与 stats/metrics/ranking.js 的 PLACEHOLDER_RE 同一把尺子（半角 / 全角 / 长破折号），
@@ -478,7 +511,7 @@ def append_external_side_column(workbook, mapping):
 
 
 # ---------------------------------------------------------------------------
-# 第 4 步：事件表追加「遏制时长 / 识别时长 / 处置时长 / 响应时长」四列
+# 第 4 步：事件表追加「遏制时长 / 识别时长 / 处置时长 / 响应时长 / 闭环时长」五列
 # ---------------------------------------------------------------------------
 
 def parse_time_cell(cell):
@@ -517,43 +550,52 @@ def parse_time_cell(cell):
     return None, 'unparsed'
 
 
-def _missing_headers(ws, bounds, required):
-    """在前 HEADER_SEARCH_ROWS 行里找**最像表头**的那一行，回报缺了哪几个列名。
+def _duration_header_row(ws, bounds):
+    """在前 HEADER_SEARCH_ROWS 行里找**最像表头**的那一行，回报命中那几个列名落在第几列。
 
-    只给「缺列不抛错」那条路当诊断用（哪一列找不到得说清楚，否则用户不知道该等谁来改）。
+    第 4 步专用。与 `_find_header_row` 的差别是**不要求五个列名一个不缺** ——
+    那一条是第 1/2 步的口径（缺列就该整步停），第 4 步从 2026-10-12 起改成
+    **逐列独立**：一列时长只由它自己那两个源列决定，源列少一列只停那一列，
+    其余三列照算（用户口径：「不要因为一个影响别的时间计算」）。所以这里只要能
+    定位到表头就行，缺哪几列 / 哪几列没算，由调用方按「对」逐个判。
+
     取「命中最多」的那一行而不是第一行：数据行里偶尔会有一格正好等于某个列名的文字，
-    取命中最多的一行对这种噪声最稳。
+    取命中最多的一行对这种噪声最稳（这几个列名都是长中文词，命中数超过真表头几乎不可能；
+    真表头也缺席时命中数会是 0，那时整步按 `no_column` 停 —— 不会往数据行上追加列）。
+
+    :returns: `(行号, {列名: 0 基列号}, 该行的文字)`；一行都命不中时是 `(None, {}, [])`
     """
     min_row, min_col, max_row, max_col = bounds
     last_row = min(max_row, min_row + HEADER_SEARCH_ROWS - 1)
-    best_row, best_hits = None, 0
+    best_row, best_hits, best_columns, best_values = None, 0, {}, []
     for row in range(min_row, last_row + 1):
         values = _row_texts(ws, row, max_col, min_col)
-        hits = sum(1 for header in required if header in values)
-        if hits > best_hits:
-            best_row, best_hits = row, hits
-    if best_row is None:
-        return None, list(required)
-    values = _row_texts(ws, best_row, max_col, min_col)
-    return best_row, [header for header in required if header not in values]
+        hit = [header for header in DURATION_SOURCE_HEADERS if header in values]
+        if len(hit) > best_hits:
+            best_row, best_hits, best_values = row, len(hit), values
+            best_columns = {header: values.index(header) for header in hit}
+    return best_row, best_columns, best_values
 
 
 def append_duration_columns(workbook):
-    """给事件表追加「遏制时长」「识别时长」「处置时长」「响应时长」四列。
+    """给事件表追加「遏制时长」「识别时长」「处置时长」「响应时长」「闭环时长」五列。
 
     逐个精确取这五个时间列，两两做减法，把**分钟数（2 位小数）**写进新列
-    （用户口径；「响应时长」是 2026-10-10 追加的第四条）：
+    （用户口径；「响应时长」是 2026-10-10 追加的第四条，2026-10-13 又追加了第五条
+    「闭环时长」—— 用户原话「计算方式跟处置时长一样」，所以它与「处置时长」同式同源，
+    是刻意保留的冗余列）：
 
     ```text
       遏制时长 = 事件遏制时间 - 专家研判时间
       识别时长 = 事件创建时间 - 组件检出时间
       处置时长 = 事件闭环时间 - 事件创建时间
       响应时长 = 专家研判时间 - 组件检出时间
+      闭环时长 = 事件闭环时间 - 事件创建时间   （与「处置时长」同式，用户 2026-10-13 口径）
     ```
 
     五个必须这么写的地方：
     1. **必须排在第 2 步之后**。新列落在使用范围的右边界 +1，而第 2 步刚往同一张表
-       末尾追加了「内网外网资产」—— 先跑这一步的话，四列时长会插到它的左边，
+       末尾追加了「内网外网资产」—— 先跑这一步的话，五列时长会插到它的左边，
        交付物里的列序就与用户看到的说明对不上了。
     2. **按行独立跳过，不整列跳过**。某行只要有一个源格是空 / `-`（占位符），
        这一对就算不出来 —— 那一格留空，但**同一行的另外几对照算**（用户口径：
@@ -569,13 +611,22 @@ def append_duration_columns(workbook):
        原列位置读；事件表的列集本身是数据相关的，所以这里也不写死"原有多少列"）。
     5. **缺列不抛错，但要吼**（与第 3 步的告警表同一条口径，理由不同）：这五个时间列
        （尤其「事件遏制时间」「专家研判时间」是平台近版才有的列）在客户环境里可能一行都不带，
-       为它把整份报告打掉不值当；但缺了必须让用户看见（日志明写「这次没算时长、缺哪几列」），
-       不能悄悄少四列。
+       为它把整份报告打掉不值当；但缺了必须让用户看见（日志明写「这次没算哪几列、各缺哪一列」），
+       不能悄悄少几列。
        ⚠️ **「不抛错」只是这一步的失败口径，不代表下游看不见**：G7「威胁平均遏制时间」
        （stats/metrics/event.js 的 averageContainedMinutes）读的就是这里追加出来的
        「遏制时长」列 —— 这一步没加出这一列时，G7 会不写值 + 记错误（不是悄悄数成 0）。
        从 2026-10-12 起本步骤跑在**解析之前**（下载件原地改写），所以这一列真的会进 ctx，
        取值层不再另写一份实现。
+    6. **一列缺席只停它自己那一列**（用户口径 2026-10-12：「不要因为一个影响别的时间计算」）。
+       五个时长列**各自独立成立**：只看它自己那两个源列在不在表头里，缺的那一列不建，
+       其余照建照算 —— 「事件遏制时间」缺席不该把「识别时长 / 处置时长 / 响应时长 / 闭环时长」
+       一起拖下水（它们四个的算式里根本没有那一列）。从前是整步 all-or-nothing：五个源列缺一个，
+       四列全不追加。**「这一列整列没算出来」= 新列没建**，不是「建一列空的」——
+       建空列会让 G7 把"平台没给这一列"读成"这段时间没有遏制样本"，悄悄写成 0、不报错
+       （R10 情形②与③的分界，正是这一条）。
+       代价：这一步的 status 不再能概括"每一列都算了" —— 要看 `addedNames`（算了哪几列）
+       与 `blocked`（没算哪几列、各缺哪一列 `missing`）。
 
     :returns: summary: dict（不含任何 openpyxl 对象，要进 stdout 的 JSON）
     """
@@ -589,7 +640,11 @@ def append_duration_columns(workbook):
         'sheet': EVENT_SHEET_NAME,
         'headerRow': None,
         'sourceColumns': {},
+        'missing': [],
+        'blocked': [],
+        'addedNames': [],
         'addedColumns': [],
+        'alreadyPresent': [],
         'dataRows': 0,
         'filled': {},
         'blankSkipped': {},
@@ -602,46 +657,65 @@ def append_duration_columns(workbook):
     if bounds is None:
         return dict(base, status='empty_sheet')
 
-    header = _find_header_row(ws, bounds, list(DURATION_SOURCE_HEADERS))
-    if header is None:
-        if not _has_any_value(ws, bounds):
-            # 空表是合法状态（该时间段确实没事件），不抛错
-            return dict(base, status='empty_sheet')
-        # 有事件行但凑不齐这五列：不抛错（见头注第 5 条），把缺的列名报出去
-        row, missing = _missing_headers(ws, bounds, DURATION_SOURCE_HEADERS)
-        return dict(base, status='no_column', headerRow=row, missing=missing)
+    header_row, columns, header_values = _duration_header_row(ws, bounds)
+    if header_row is None and not _has_any_value(ws, bounds):
+        # 空表是合法状态（该时间段确实没事件），不抛错
+        return dict(base, status='empty_sheet')
 
-    header_row, columns, header_values = header
+    # 五个源列里哪些在表头行上（不在的＝平台这次没给这一列）。
+    # header_row 是 None（五个列名一个都没找到）时 columns 是空的 —— 于是下面这些
+    # 判断自然得出「五个都缺、五列全停」，与从前那条路同款结论（见头注第 5 条）。
+    source_cols = {
+        header: columns[header] for header in DURATION_SOURCE_HEADERS if header in columns
+    }
+    missing = [header for header in DURATION_SOURCE_HEADERS if header not in columns]
 
-    # 幂等闸：四个时长列已经在表头里了（同一份下载件被预处理了第二次）。
-    # 同第 2 步：再追加一次会写出重名表头，parse_table_rows.py 会抛错，直接跳过。
-    if all(name in header_values for name, _, _ in DURATION_COLUMNS):
-        return dict(base, status='already_present', headerRow=header_row,
-                    sourceColumns={
-                        name: get_column_letter(columns[name] + 1)
-                        for name in DURATION_SOURCE_HEADERS
-                    },
+    # 逐列独立（头注第 6 条）：一列时长只由它自己那一对源列决定 —— 缺的那列进 blocked，
+    # 其余照算。**「这一列没算」= 新列根本不建**，不是建一列空的（见头注第 6 条）。
+    active = []
+    blocked = []
+    for name, left, right in DURATION_COLUMNS:
+        absent = [header for header in (left, right) if header not in columns]
+        if absent:
+            blocked.append({'name': name, 'missing': absent})
+        else:
+            active.append((name, left, right))
+
+    source_columns_text = {
+        header: get_column_letter(col + 1) for header, col in source_cols.items()
+    }
+
+    # 一对都凑不齐：整步停在这里（从前是"五个里缺一个就整步停"，现在只有这种才是整步停）
+    if not active:
+        return dict(base, status='no_column', headerRow=header_row, missing=missing,
+                    sourceColumns=source_columns_text, blocked=blocked)
+
+    # 幂等闸：**该追加的那几列**已经在表头里了（同一份下载件被预处理了第二次）。
+    # 同第 2 步：再追加一次会写出重名表头，parse_table_rows.py 会抛错。
+    # 只挑「还没在表头里」的那几列追加 —— 从前是"四列全在才跳过"，部分在时会追加出重名列。
+    to_add = [(name, left, right) for name, left, right in active if name not in header_values]
+    if not to_add:
+        return dict(base, status='already_present', headerRow=header_row, missing=missing,
+                    sourceColumns=source_columns_text, blocked=blocked,
+                    addedNames=[name for name, _, _ in active],
+                    alreadyPresent=[name for name, _, _ in active],
                     addedColumns=[
                         get_column_letter(header_values.index(name) + 1)
-                        for name, _, _ in DURATION_COLUMNS
+                        for name, _, _ in active
                     ])
 
-    source_cols = {header: columns[header] for header in DURATION_SOURCE_HEADERS}
+    added_cols = [bounds[3] + 1 + index for index in range(len(to_add))]
 
-    # 第 2 步追加的列已经在用范围里，所以这里是「三列时长」的起点
-    first_new_col = bounds[3] + 1
-    added_cols = [first_new_col + index for index in range(len(DURATION_COLUMNS))]
-
-    filled = {name: 0 for name, _, _ in DURATION_COLUMNS}
-    blank_skipped = {name: 0 for name, _, _ in DURATION_COLUMNS}
-    unparsed_skipped = {name: 0 for name, _, _ in DURATION_COLUMNS}
-    negative = {name: 0 for name, _, _ in DURATION_COLUMNS}
+    filled = {name: 0 for name, _, _ in to_add}
+    blank_skipped = {name: 0 for name, _, _ in to_add}
+    unparsed_skipped = {name: 0 for name, _, _ in to_add}
+    negative = {name: 0 for name, _, _ in to_add}
     unparsed_samples = []
     # 同一个坏格会被多对用到（「组件检出时间」既是识别的减数、也是响应的减数），
     # 样例按「格子」去重，免得同一个格子在日志里报两遍
     seen_unparsed = set()
 
-    for (name, _, _), col in zip(DURATION_COLUMNS, added_cols):
+    for (name, _, _), col in zip(to_add, added_cols):
         ws.cell(row=header_row, column=col).value = name
 
     for row in range(header_row + 1, bounds[2] + 1):
@@ -652,7 +726,7 @@ def append_duration_columns(workbook):
             for header, col in source_cols.items()
         }
 
-        for (name, left, right), col in zip(DURATION_COLUMNS, added_cols):
+        for (name, left, right), col in zip(to_add, added_cols):
             left_value, left_kind = parsed[left]
             right_value, right_kind = parsed[right]
 
@@ -690,21 +764,154 @@ def append_duration_columns(workbook):
             ws.cell(row=row, column=col).value = minutes
             filled[name] += 1
 
-    # 列宽：只补新追加的四列（原有列的列宽一个都不动，那几列最终由美化阶段按内容定）
-    for (name, _, _), col in zip(DURATION_COLUMNS, added_cols):
+    # 列宽：只补本次新追加的那几列（原有列的列宽一个都不动，那几列最终由美化阶段按内容定）
+    for (name, _, _), col in zip(to_add, added_cols):
         width = min(max(len(name) + 2, MIN_COL_WIDTH), MAX_COL_WIDTH)
         ws.column_dimensions[get_column_letter(col)].width = width
 
     return dict(base, **{
         'status': 'ok',
         'headerRow': header_row,                  # Excel 行号（1 基）
-        'sourceColumns': {header: get_column_letter(col + 1) for header, col in source_cols.items()},
+        'sourceColumns': source_columns_text,
+        'missing': missing,                       # 五个源列里缺席的（[] = 五个都在）
+        'blocked': blocked,                       # 因此没算的时长列（每列各自缺哪些源列）
+        'addedNames': [name for name, _, _ in to_add],
         'addedColumns': [get_column_letter(col) for col in added_cols],
+        'alreadyPresent': [name for name, _, _ in active if name in header_values],
         'dataRows': bounds[2] - header_row,
         'filled': filled,
         'blankSkipped': blank_skipped,
         'unparsedSkipped': unparsed_skipped,
         'negative': negative,
+        'unparsedSamples': unparsed_samples,
+    })
+
+
+# ---------------------------------------------------------------------------
+# 第 5 步：事件表追加「事件创建月份」列（= 「事件创建时间」取年月）
+# ---------------------------------------------------------------------------
+
+def append_month_column(workbook):
+    """事件表追加一列「事件创建月份」（`YYYY-MM` 文本），落在**第 4 步那五列的最右边**。
+
+    用户口径 2026-10-14：C58:N59「按月平均响应时长」按传入的 `--start/--end` 切月份桶，
+    读事件表「事件创建时间」，落在哪个月就把该行的「响应时长」计进那个月，取非空均值。
+    月份本身在**这里**解析（理由与三个时长列同一条：时间格的三种形态只有 `parse_time_cell`
+    认得全），取值层只分桶、求均值、对越界槽位写空串。
+
+    ⚠️ **刻意不并进 `append_duration_columns`**：那一步的语义是「两个源列相减 -> 一个差值」，
+    本步是「单列取年月」，没有任何相减。并进去会让那个函数的头注（「第 4 步」那一整段）
+    一句话都对不上，也会把「时长列逐列独立 / 负差值不合法」这些只属于差值的口径
+    传染到本列上。两步共用的是 `parse_time_cell` 与「幂等闸」这两处**机制**，不是口径。
+
+    口径细则：
+      1. **源列是「事件创建时间」**（`CREATED_HEADER`，第 4 步已经在读它）。它在表头里
+         缺席时本列不建、`status='no_column'`，**不抛错**（与第 4 步同一条失败口径：
+         为缺列打掉整份报告不值当，但必须报到日志里 —— 见 `_log_month_summary`）。
+      2. **三种取值三档计数**（用户口径 2026-10-14：「『事件创建时间』不可能为空」）：
+         有值 -> 写 `YYYY-MM` 并记 `filled`；空值 / 占位符 `-` -> 留空并记 `blankSkipped`；
+         解析不出来 -> 留空并记 `unparsedSkipped` + 记样例。**不抛错**，与第 4 步一致 ——
+         但那一句"不可能为空"是本列的**观察**，不是判据：真出现空值时按空处理，
+         计数报到日志里，不写成 `1970-01` 那种凭空捏的月份。
+      3. **写的是文本**，不是日期型：取值层拿它当桶键做字符串相等比较（`'2026-07'`），
+         落成日期型会被 openpyxl 还原成 datetime，读回来就不是同一个东西了。
+      4. **幂等闸**：列名已经在表头里就整个跳过（`status='already_present'`）——
+         与第 4 步同一条理由：重复追加会写出重名表头，`parse_table_rows.py` 会直接抛错。
+      5. **落点是"最后一个已用列的右边"**，不是 `bounds[3] + 1 + 6` 这种按列数算的算式：
+         第 4 步是**逐列独立**的，五个时长列可能只追加出其中三列（甚至一列都没算出、
+         整步走 `no_column` 提前返回），按固定偏移追加会留出一段空洞列。
+         所以这里重新取一次 `_used_bounds` —— 第 4 步的成果已经落在表上，取到的就是真末列。
+
+    :returns: summary: dict（不含任何 openpyxl 对象，要进 stdout 的 JSON）
+    """
+    ws = workbook[EVENT_SHEET_NAME] if EVENT_SHEET_NAME in workbook.sheetnames else None
+    if ws is None:
+        raise ValueError(
+            f'工作簿里没有「{EVENT_SHEET_NAME}」sheet，无法追加月份列'
+        )
+
+    base = {
+        'sheet': EVENT_SHEET_NAME,
+        'headerRow': None,
+        'sourceColumn': None,     # 源列「事件创建时间」落在第几列（Excel 字母）
+        'addedName': CREATE_MONTH_COLUMN,
+        'addedColumn': None,      # 本列落在第几列（Excel 字母）
+        'alreadyPresent': False,
+        'dataRows': 0,
+        'filled': 0,
+        'blankSkipped': 0,
+        'unparsedSkipped': 0,
+        'unparsedSamples': [],
+    }
+
+    bounds = _used_bounds(ws)
+    if bounds is None:
+        return dict(base, status='empty_sheet')
+
+    # 表头行沿用第 4 步那个定位器：它找的就是 DURATION_SOURCE_HEADERS 命中最多的那一行，
+    # 而「事件创建时间」正是其中一员 —— 源列在不在、在第几列，一次就拿到了。
+    header_row, columns, header_values = _duration_header_row(ws, bounds)
+    if header_row is None and not _has_any_value(ws, bounds):
+        # 空表是合法状态（该时间段确实没事件），不抛错
+        return dict(base, status='empty_sheet')
+
+    source_col = columns.get(CREATED_HEADER)
+    if source_col is None:
+        # 表头行都找不到时也是这一档：没有「事件创建时间」这一列，就没有月份可算
+        return dict(base, status='no_column', headerRow=header_row)
+
+    base = dict(base, headerRow=header_row,
+                sourceColumn=get_column_letter(source_col + 1),
+                dataRows=bounds[2] - header_row)
+
+    # 幂等闸：列已经在表头里了（同一份下载件被预处理了第二次）。
+    # 只认**精确相等**的列名，与第 4 步同一把尺子。
+    if CREATE_MONTH_COLUMN in header_values:
+        return dict(base, status='already_present', alreadyPresent=True,
+                    addedColumn=get_column_letter(header_values.index(CREATE_MONTH_COLUMN) + 1))
+
+    # 落点 = 最后一个已用列的右边。重新取一次 bounds：第 4 步刚追加过时长列，
+    # 而且可能只追加出了其中几列（逐列独立），按固定偏移算会留空洞（见头注第 5 条）。
+    target_col = _used_bounds(ws)[3] + 1
+    ws.cell(row=header_row, column=target_col).value = CREATE_MONTH_COLUMN
+
+    filled = 0
+    blank_skipped = 0
+    unparsed_skipped = 0
+    unparsed_samples = []
+
+    for row in range(header_row + 1, bounds[2] + 1):
+        value, kind = parse_time_cell(ws.cell(row=row, column=source_col + 1))
+
+        if kind == 'blank':
+            blank_skipped += 1
+            continue
+        if kind == 'unparsed':
+            unparsed_skipped += 1
+            if len(unparsed_samples) < MAX_DETAIL_ITEMS:
+                unparsed_samples.append({
+                    'row': row,
+                    'column': CREATED_HEADER,
+                    'value': cell_text(ws.cell(row=row, column=source_col + 1)),
+                })
+            continue
+
+        ws.cell(row=row, column=target_col).value = MONTH_LABEL_FORMAT.format(
+            year=value.year, month=value.month
+        )
+        filled += 1
+
+    # 列宽与第 4 步同一条口径（原有列的列宽一个都不动，那几列最终由美化阶段按内容定）
+    ws.column_dimensions[get_column_letter(target_col)].width = min(
+        max(len(CREATE_MONTH_COLUMN) + 2, MIN_COL_WIDTH), MAX_COL_WIDTH
+    )
+
+    return dict(base, **{
+        'status': 'ok',
+        'addedColumn': get_column_letter(target_col),
+        'filled': filled,
+        'blankSkipped': blank_skipped,
+        'unparsedSkipped': unparsed_skipped,
         'unparsedSamples': unparsed_samples,
     })
 
@@ -773,43 +980,80 @@ def _log_event_summary(logs, event):
         )
 
 
+def _blocked_durations_text(duration):
+    """「这次没算哪几列、各缺哪一列」那一句。
+
+    逐列独立（2026-10-12）之后，这一步随时可能出现「算了两列、停了两列」的部分成功 ——
+    这一句是缺列现场的唯一出口：不吼的话，部分成功在日志里看起来和全成功一模一样。
+    排在这一步所有状态之后（含 already_present：那种表上也可能是缺过一列的）。
+    """
+    reasons = '；'.join(
+        f"「{item['name']}」缺 " + '、'.join(f"「{header}」" for header in item['missing'])
+        for item in duration['blocked']
+    )
+    contained_blocked = any(
+        item['name'] == DURATION_COLUMNS[0][0] for item in duration['blocked']
+    )
+    if len(duration['blocked']) == len(DURATION_COLUMNS):
+        # 全停（= 一对源列都没凑齐，no_column 那个现场）：没有"别的时长照算"可言
+        head = (f"[预处理] ⚠️ {duration['sheet']} 这次**五个时长列一列都没算**"
+                '（每个时长列各要一对源列，这里一对都没凑齐）：')
+    else:
+        head = (f"[预处理] ⚠️ {duration['sheet']} 这次没算这几列时长：")
+    return (
+        head + reasons + '。'
+        + ('' if len(duration['blocked']) == len(DURATION_COLUMNS)
+           else '缺一列只停它自己那一列，别的时长照算'
+                '（用户口径 2026-10-12：不要让一列影响别的时间计算）。')
+        + (f"其中「{DURATION_COLUMNS[0][0]}」是 G7「威胁平均遏制时间」要读的列 —— "
+           '这一列没算出来时 G7 会不写值 + 记错误，不会被悄悄数成 0。'
+           if contained_blocked else '')
+        + '为它把整份报告打掉不值当 —— 但若本该有列名，那就是平台改了列名，请人工确认。'
+    )
+
+
 def _log_duration_summary(logs, duration):
-    """第 4 步的日志。"""
+    """第 4 步的日志。
+
+    ⚠️ 这一步**逐列独立**（2026-10-12 起）：`status` 是整步的结论，**不代表每一列都算了** ——
+    「算了哪几列」看 `addedNames`，「没算哪几列、各缺哪一列」看 `blocked`
+    （那份清单由 `_blocked_durations_text` 单独吼一句）。
+    """
+    if duration['status'] == 'empty_sheet':
+        logs.append(
+            f"[预处理] {duration['sheet']} sheet 是空的（该时间段无事件），未追加时长列"
+        )
+        return
     if duration['status'] == 'already_present':
         logs.append(
             f"[预处理] {duration['sheet']} 里已经有时长列（表头第 {duration['headerRow']} 行），"
             '这次不再追加（幂等闸：重复追加会写出重名表头）'
         )
-        return
-    if duration['status'] == 'empty_sheet':
-        logs.append(
-            f"[预处理] {duration['sheet']} sheet 是空的（该时间段无事件），未追加时长列"
-        )
     elif duration['status'] == 'no_column':
         # 不抛错（见那一步的头注第 5 条），但必须吼：不吼的话「这次没算时长」与
-        # 「这次算了但每行都缺时间」在日志里长得一模一样
+        # 「这次算了但每行都缺时间」在日志里长得一模一样。
+        # 具体哪几列没算、各缺哪一列，由下面 blocked 那一句讲（这一段只说现场）。
+        where = (f"表头第 {duration['headerRow']} 行" if duration['headerRow']
+                 else f"前 {HEADER_SEARCH_ROWS} 行里一个时间列名都没找到")
         logs.append(
             f"[预处理] ⚠️ {duration['sheet']} 里凑不齐时长列要用的时间列（缺 "
             + '、'.join(f'「{name}」' for name in duration['missing'])
-            + f"；表头第 {duration['headerRow']} 行）：这次**没算**"
-            + '、'.join(name for name, _, _ in DURATION_COLUMNS)
-            + f"，取值层读不到这几列（报告里也没有）。"
-            + f"其中「{DURATION_COLUMNS[0][0]}」是 G7「威胁平均遏制时间」要读的列 —— "
-            '这一列没算出来时 G7 会不写值 + 记错误，不会被悄悄数成 0。'
-            '为它把整份报告打掉不值当 —— 但若本该有列名，那就是平台改了列名，请人工确认。'
+            + f"；{where}）"
         )
     else:
+        names = duration['addedNames']
         pairs_text = ' / '.join(
             f"{name} = {left} - {right}" for name, left, right in DURATION_COLUMNS
+            if name in names
         )
         logs.append(
             f"[预处理] {duration['sheet']}: 表头第 {duration['headerRow']} 行，"
             f"{duration['dataRows']} 行数据 -> 末尾新增 "
-            + '、'.join(f"{col} 列「{name}」" for (name, _, _), col
-                        in zip(DURATION_COLUMNS, duration['addedColumns']))
+            + '、'.join(f"{col} 列「{name}」"
+                        for name, col in zip(names, duration['addedColumns']))
             + f"（分钟数，2 位小数）：{pairs_text}"
         )
-        for (name, _, _), col in zip(DURATION_COLUMNS, duration['addedColumns']):
+        for name, col in zip(names, duration['addedColumns']):
             logs.append(
                 f"[预处理] {duration['sheet']} {col} 列「{name}」: "
                 f"算得 {duration['filled'][name]} 行"
@@ -829,6 +1073,55 @@ def _log_duration_summary(logs, duration):
                     lambda s: f"第{s['row']}行「{s['column']}」={s['value']!r}"
                 )
             )
+    if duration['blocked']:
+        logs.append(_blocked_durations_text(duration))
+
+
+def _log_month_summary(logs, month):
+    """第 5 步（追加「事件创建月份」列）的日志。
+
+    与第 4 步同一条失败口径：**缺列不中止报告**，但必须吼出来 —— 不吼的话
+    「这次没算月份」与「这次算了、每行创建时间都是空的」在日志里长得一模一样，
+    而前者意味着 C58:N59 那 24 格会不写值 + 记错误。
+    """
+    sheet = month['sheet']
+    if month['status'] == 'empty_sheet':
+        logs.append(f"[预处理] {sheet} sheet 是空的（该时间段无事件），未追加「{CREATE_MONTH_COLUMN}」列")
+        return
+    if month['status'] == 'no_column':
+        where = (f"表头第 {month['headerRow']} 行" if month['headerRow']
+                 else f"前 {HEADER_SEARCH_ROWS} 行里一个时间列名都没找到")
+        logs.append(
+            f"[预处理] ⚠️ {sheet} 里找不到「{CREATED_HEADER}」列（{where}）—— "
+            f"这次没追加「{CREATE_MONTH_COLUMN}」列；为它把整份报告打掉不值当，"
+            '但若本该有列名，那就是平台改了列名，请人工确认。'
+        )
+        return
+    if month['status'] == 'already_present':
+        logs.append(
+            f"[预处理] {sheet} 里已经有「{CREATE_MONTH_COLUMN}」列（表头第 {month['headerRow']} 行），"
+            '这次不再追加（幂等闸：重复追加会写出重名表头）'
+        )
+        return
+
+    logs.append(
+        f"[预处理] {sheet}: 表头第 {month['headerRow']} 行，{month['dataRows']} 行数据 -> "
+        f"末尾新增 {month['addedColumn']} 列「{CREATE_MONTH_COLUMN}」"
+        f"（{CREATED_HEADER} 取年月，{MONTH_LABEL_FORMAT.format(year=2026, month=7)} 形态）："
+        f"算得 {month['filled']} 行"
+        + (f"（创建时间为空 / 占位符「-」跳过 {month['blankSkipped']} 行）"
+           if month['blankSkipped'] else '')
+        + (f"（⚠️ 创建时间解析不出来跳过 {month['unparsedSkipped']} 行）"
+           if month['unparsedSkipped'] else '')
+    )
+    if month['unparsedSamples']:
+        logs.append(
+            f"[预处理] ⚠️ {sheet} 有「{CREATED_HEADER}」格解析不出来（按空处理、留空），样例: "
+            + _format_list(
+                month['unparsedSamples'],
+                lambda s: f"第{s['row']}行「{s['column']}」={s['value']!r}"
+            )
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -855,11 +1148,12 @@ def _set_first_sheet_title(workbook, title):
 
 
 def preprocess_event_file(asset_path, event_path, logs=None):
-    """事件表那三步（建映射 / 加「内网外网资产」/ 加四个时长列）跑在解析之前，**原地改写下载件**。
+    """事件表那几步（建映射 / 加「内网外网资产」/ 加五个时长列 / 加「事件创建月份」）跑在解析之前，**原地改写下载件**。
 
     用户口径 2026-10-12：取值层必须在预处理之后 —— ctx 里的事件表行对象要能直接读到
     「遏制时长」。这一列是追加出来的，所以只能在解析前落到文件上
     （与 scripts/remove_rows_by_status.py 同款：openpyxl 读进来、改完 save 回原路径）。
+    用户口径 2026-10-14 追加的「事件创建月份」同理：C58:N59 要读它分桶。
 
     资产表只读、不改（只拿它建 IP -> 内网/外网 映射）。asset_path 为空按「没有资产表」
     处理（不建映射、所有行标「不在资产表」），与资产表是空表同一条路。
@@ -867,7 +1161,7 @@ def preprocess_event_file(asset_path, event_path, logs=None):
     :param asset_path: 资产表下载件（scripts/process_asset_table.py 加工过的那个）
     :param event_path: 事件表下载件 —— **会被原地改写**
     :param logs: 可选的日志列表
-    :returns: 阶段汇总 {ran, asset, event, duration, logs}
+    :returns: 阶段汇总 {ran, asset, event, duration, month, logs}
     """
     logs = logs if logs is not None else []
 
@@ -877,8 +1171,9 @@ def preprocess_event_file(asset_path, event_path, logs=None):
     logs.append('===== 表格预处理（下载之后、解析之前）=====')
     logs.append(
         '[预处理] 进入表格预处理阶段（下载之后、解析之前）：'
-        f'资产表建 IP -> 内网/外网 映射，事件表逐行追加「{NEW_HEADER}」列与四个时长列'
-        f'（{"、".join(name for name, _, _ in DURATION_COLUMNS)}）。'
+        f'资产表建 IP -> 内网/外网 映射，事件表逐行追加「{NEW_HEADER}」列、五个时长列'
+        f'（{"、".join(name for name, _, _ in DURATION_COLUMNS)}）'
+        f'与「{CREATE_MONTH_COLUMN}」列（{CREATED_HEADER} 取年月，给 C58:N59 分桶用）。'
     )
 
     if asset_path:
@@ -914,6 +1209,10 @@ def preprocess_event_file(asset_path, event_path, logs=None):
     _log_event_summary(logs, event)
     duration = append_duration_columns(event_workbook)
     _log_duration_summary(logs, duration)
+    # 第 5 步排在第 4 步**之后**：它落在"最后一个已用列的右边"，第 4 步刚追加的时长列
+    # 就是那个"最后一个"（见 append_month_column 头注第 5 条）
+    month = append_month_column(event_workbook)
+    _log_month_summary(logs, month)
 
     _set_first_sheet_title(event_workbook, original_title)
     event_workbook.save(event_path)
@@ -924,6 +1223,7 @@ def preprocess_event_file(asset_path, event_path, logs=None):
         'asset': asset,
         'event': event,
         'duration': duration,
+        'month': month,
         'logs': logs,
     }
 

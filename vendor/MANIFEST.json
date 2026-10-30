@@ -50,7 +50,7 @@
       "~$* / __pycache__ / *.pyc": "Office 锁文件与字节码，留着会让「快照一致」永远对不上"
     }
   },
-  "copied_at": "2026-09-24T06:43:41.330Z",
+  "copied_at": "2026-10-13T02:12:52.057Z",
   "file_count": 73,
   "total_bytes": 17906971,
   "files": {
@@ -80,7 +80,7 @@
     "backend/modules/__init__.py": "0cb21025dc9f9f9507bd355d9c672777e7bc9d826c9b84446492b8efee49af3a",
     "backend/modules/admin_auth.py": "092acc796d0a49b0510b946d01d7b4ba987e936e36560e8fa3a172ba9cf1f27f",
     "backend/modules/audit_logger.py": "dddbe6040eb4032d298e80a5e9533cce09a33fd612de8873aab35289912b532f",
-    "backend/modules/excel_handler.py": "7c8aa7b9555ddd092525ef8ac7b2cd35dd5ffe6ea24f7f86df0a205d2e9535ec",
+    "backend/modules/excel_handler.py": "dcd3694620210646d8bf7a789cce09063f60028c530bdc2088ccb96e83dae80e",
     "backend/modules/file_lock.py": "2e948fd4f9d5f1c1f821540f0d5f62e0085eb85e91e9957814313ffe52c16506",
     "backend/modules/job_store.py": "89cafa2f00145d734b2786a6e036c0e71b1057eecbd8d48a8d02ae321d9e4eb3",
     "backend/modules/llm_orchestrator.py": "432688bd8ea24c1b8a85321add8e7cccada103b44fe8f858a33c485df360e83a",

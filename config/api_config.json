@@ -26,5 +26,5 @@
     }
   },
 
-  "_endpoints_todo": "endpoints 目前只是登记，mssw_client.js 仍用自己的常量（本步不做搬迁，保持改动可二分）。漏洞表/弱密码表（2026-10-08）已接，但两个接口（/order/v1/vul_manage/vul_risk_export、/order/v1/vul_manage/download_file）**仍留在 mssw_client.js 的常量里**，本文件没有登记副本 —— 别照这份 endpoints 判断哪张表接了。剩下暴露面一张表未接。"
+  "_endpoints_todo": "endpoints 目前只是登记，mssw_client.js 仍用自己的常量（本步不做搬迁，保持改动可二分）。六份总表现在都接了，但那几个接口仍留在 mssw_client.js 的常量里，本文件没有登记副本 —— 别照这份 endpoints 判断哪张表接了。弱密码表是**两份**：内网 POST /order/v1/vul_manage/vul_risk_export、互联网 POST /order/v1/internet_vul_manage/vul_risk_export；两份导出前都要先 POST 各自的 /custom_headers（body {header_id}）取视图配置，下载各走自己的 /download_file。暴露面表（2026-10-15）与**漏洞表（2026-10-16 起，data_type 51）**走 /gateway/easm-exposure/order/v1/vulnmgr/exposed_surface/report + .../report_async_task + 附件端点 /gateway/workflow/order/v1/attachments?_file=<文件 id>。⚠️ 漏洞表与弱密码表**不同源**：漏洞表是异步报表（zip），弱密码表是同步导出（xlsx）。"
 }

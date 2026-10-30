@@ -27,7 +27,11 @@
        Excel 打开会自己重算，肉眼看不出来；这是**已知问题**，尚未修（见 MIGRATION.md §8）。
     2. 时间列不套数字格式（见 TIME_HEADER_KEYWORDS 处说明）。
     3. 结构识别不出来的 sheet（空表、非表格页）自动跳过，不算失败 ——
-       暴露面 / 资产漏洞表目前就是空表。
+       六份总表的 sheet 现在都有数据（暴露面 2026-10-15 起也搬表），
+       「数据统计」是人工填写区、本就不在美化的范围内（调用方按 exclude_sheets 排除）。
+    4. 平台标的**标记色行**（漏洞表整行粉红 = 最近扫描新增漏洞）在统一底色之后**涂回去**
+       —— 见 scripts/marker_colors.py。必须在 apply_all 之前认出行号：reset_cell_styles
+       会把整张表的填充清零，之后就认不出来了。
 """
 import json
 import sys
@@ -52,6 +56,7 @@ from _path_helper import decode_argv
 from excel_beautifier.core import load_template
 from excel_beautifier.detector import detect_structure, detect_column_types
 from excel_beautifier.styles import apply_all
+from marker_colors import apply_marker_fill, marked_rows
 
 decode_argv()
 
@@ -180,7 +185,8 @@ def beautify(path, theme, exclude_sheets, watermark_text=None):
             skipped.append({"name": sheet_name, "reason": "在排除名单中（模板原样保留）"})
             continue
 
-        # 空表（暴露面 / 资产漏洞表目前就没有内容）：没有可套的范围，跳过不算失败
+        # 空表：没有可套的范围，跳过不算失败（现在六份总表都搬表，正常跑不该走到这；
+        # 留着是兜住 --excel 复用一份还没填数的现成 Excel 那种情况）
         if sheet.max_row is None or sheet.max_row == 0:
             skipped.append({"name": sheet_name, "reason": "空表"})
             continue
@@ -200,7 +206,22 @@ def beautify(path, theme, exclude_sheets, watermark_text=None):
         )
         protected = protect_time_columns(sheet, structure, col_types)
 
+        # 标记色行必须在套样式**之前**认出来：reset_cell_styles 会把整张表的填充清零，
+        # 之后就看不出哪一行是平台标过的了（见 marker_colors.py 的说明）。
+        marked = marked_rows(
+            sheet,
+            structure["data_start"],
+            structure["data_end"],
+            structure["col_start"],
+            structure["col_end"],
+        )
+
         apply_all(sheet, template, structure, col_types)
+
+        # 统一底色之后再涂回去 —— 这两行色是平台写在表头里的显式约定
+        # （「填充此单元格为粉红色代表最近扫描新增漏洞」），不是要抹平的样式噪声。
+        for row, color in sorted(marked.items()):
+            apply_marker_fill(sheet, row, structure["col_start"], structure["col_end"], color)
 
         # 水印只加第一个真正套了样式的 sheet（数据统计被跳过了，
         # 照搬 excel-beautifier 的"只加第一张表"会把水印加到不动的表上）
@@ -219,6 +240,7 @@ def beautify(path, theme, exclude_sheets, watermark_text=None):
             "data_rows": max(structure["data_end"] - structure["data_start"] + 1, 0),
             "columns": structure["col_end"] - structure["col_start"] + 1,
             "time_columns_without_format": protected,
+            "marker_rows": [{"row": row, "color": color} for row, color in sorted(marked.items())],
         })
 
         print(json.dumps({
@@ -228,6 +250,7 @@ def beautify(path, theme, exclude_sheets, watermark_text=None):
             "data_range": [structure["data_start"], structure["data_end"]],
             "column_range": [structure["col_start"], structure["col_end"]],
             "time_columns_without_format": protected,
+            "marker_rows": [{"row": row, "color": color} for row, color in sorted(marked.items())],
         }, ensure_ascii=False), file=sys.stderr)
 
     workbook.save(path)

@@ -40,6 +40,7 @@ description: 从 mssw 平台下载资产/事件/告警/漏洞/弱密码总表、
 |---|---|
 | `--customer <中文名>` | **必填**。平台按**全等**匹配客户名，一个字的差别就会报「未找到匹配的客户」。这时让用户确认全名，或改用 `--customer-id` 直接给 ID。 |
 | `--start` / `--end` | 统计起止日，`YYYY-MM-DD`。 |
+| `--protect-start` / `--protect-end` | **可选**，护网时间（HW）起止日，成对传入、闭区间。喂 Excel「数据统计」两格：D130「hw 时间事件总数」（窗口内事件行数）与 M3「护网时间」（把起止范围印进报告）；与 `--start` / `--end`（报告期）是两件事。用户给了 HW 时间就传；**没给就不传，D130 写 0、M3 留空**（可选参数，不传 = 这次不按 HW 窗口统计）。只传一端是参数错。 |
 | 报告类型 | 默认协同运营报告；用户明确说「托管运营报告 / simple」才换 `mss_classic_ops_3`。 |
 
 客户全名或时间段不清楚时**回去问用户**，不要自己编一个日期范围。
@@ -115,7 +116,8 @@ stdout **只出恰好一个 JSON 对象**（进度日志全走 stderr）。成�
 
 ### 网络重试（下载层）
 
-五张表（事件 / 告警 / 资产 / 漏洞 / 弱密码）的请求都过 [mssw_client.js](mssw_client.js) 的
+六张表（事件 / 告警 / 资产 / 漏洞 / 弱密码 / 暴露面；弱密码 2026-10-19 起是内网、互联网
+两次独立下载）的请求都过 [mssw_client.js](mssw_client.js) 的
 `requestJson` / `requestBuffer`，重试只在那一层做一次，判据在 [mssw_retry.js](mssw_retry.js)：
 
 - **会重试**：连接层错（`ECONNRESET` / `ETIMEDOUT` / `EAI_AGAIN` …）、`5xx` / `408` / `425` / `429`。
@@ -128,6 +130,15 @@ stdout **只出恰好一个 JSON 对象**（进度日志全走 stderr）。成�
 - 重试用尽仍是原来那个错误、原来那个退出码 —— 重试不改变失败分类，退出码语义见上一节。
 
 接线自检：`npm run verify:retry`（起本地 server 造 5xx/断连/403/超时，断言重试次数，退出码 0 = 通过）。
+暴露面表那条下载链路（建任务 → 轮询 → 附件端点）另有 `npm run verify:exposed`：
+同样起本地 server，照 2026-10-15 的抓包应答，钉住请求体逐字（**且一个时间参数都没有**）、
+轮询到什么时候算完、附件地址与落盘名怎么定。
+漏洞表 2026-10-16 起走**同一套端点**（只有请求体不同，`data_type=51`、带 `found_time_range`），
+自检是 `npm run verify:vuln-async`：拿用户给的那条 curl 逐字比对，钉住"公司 id 与报告期之外
+一个字都不差"、报告期毫秒闭区间收尾 .999、缺报告期当场抛。
+它的**下载产物是 zip**（里面是内网 / 外网两份漏洞报表），解包、抽 `4-漏洞清单+跟踪记录`
+那两张 sheet 是 `mssw_vuln_extract.js` → `scripts/extract_vuln_report.py` 的事，
+自检是 `npm run verify:vuln-extract`（自造 zip fixture，钉 sheet 名 / 行数 / 表头逐字 / 不删行 / 幂等）。
 
 ## 四条硬约束
 
