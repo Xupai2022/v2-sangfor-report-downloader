@@ -24,7 +24,7 @@ const workdir = require('./workdir');
 /**
  * 老调用方还在传裸 host 字符串时的兜底归一：补 https://（与历史逐字一致）。
  *
- * **不能再剥协议** —— 集群入口是 `http://mssw-inner.sangfor.com.cn:30001`，
+ * **不能再剥协议** —— 集群入口可能是明文 `http://<内网入口>:<端口>`，
  * 剥掉 scheme 和端口就必然连不上。现在优先收 platform 描述符（origin 已完整）。
  */
 function originFromLegacy(value) {

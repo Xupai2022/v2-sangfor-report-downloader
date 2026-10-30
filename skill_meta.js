@@ -12,9 +12,9 @@
  * PLATFORM 是 session-manager 的 adapter 名，本仓库固定 mssw
  * （MIGRATION.md R13：不保留任何非 mssw 平台的接口代码）。
  *
- * ⚠️ 集群里 mssw 的入口**按环境不同**（见 config/api_config.json 的 origin），
- * 别拿服务名当判据 —— `mssp-nginx.mss-pro` 这名字里带 mssp，服务过的却是 mssw，
- * 而且它是个两环境同名不同后端的 k8s Service 名，打错环境的表现是 403/code=9451。
+ * ⚠️ 集群里 mssw 的入口**按环境不同**，由 Console 的平台设置（baseUrl）决定，
+ * session-manager 把它放在登录态的 requestProfile 里交给本 skill。
+ * 别拿服务名当判据 —— 服务名里带 mssp 不代表后端是 mssp，打错环境的表现是 403/code=9451。
  */
 
 const SKILL_NAME = 'v2-sangfor-report-downloader';

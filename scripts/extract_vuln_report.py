@@ -68,6 +68,7 @@ from _path_helper import decode_argv
 # 搬表逻辑**只此一处**（H4）：本脚本不自己写「表头 + 数据 + 列宽 + 数字格式」那一套，
 # 直接复用合并引擎刚写好的那个 —— 否则报告里的 sheet 与取值层读到的行集合会分家。
 from build_report import rebuild_sheet
+from marker_colors import marked_row_numbers
 # 删行判据**只写一处**（H4）：整值相等 + 「只差括号全半角/空白」的退路都用
 # remove_rows_by_status.py 里那一套，本脚本不另写一份文字比对。
 from remove_rows_by_status import find_column, normalize, paren_canon, read_header
@@ -315,14 +316,16 @@ def extract_vuln_report(zip_path, output_path, logs=None):
             source_sheet, f'{target_name}（{Path(member_name).name}）', logs
         )
 
-        rows, restored, _dropped, marked_rows = rebuild_sheet(target_sheet, source_sheet, ())
+        rows, restored, _dropped, marked_cells = rebuild_sheet(target_sheet, source_sheet, ())
+        marked_rows = marked_row_numbers(marked_cells)
         columns = target_sheet.max_column or 0
 
         logs.append(
             f'[解包] {target_name} <- {Path(member_name).name} '
             f'(sheet "{SOURCE_SHEET_NAME}", 表头第 1 行 + {rows} 行数据、{columns} 列'
             + (f'，还原 {restored} 个单元格格式' if restored else '')
-            + (f'，透传标记色行 {len(marked_rows)} 行（最近扫描新增）' if marked_rows else '')
+            + (f'，透传标记色 {len(marked_cells)} 格（{len(marked_rows)} 行，最近扫描新增）'
+               if marked_cells else '')
             + ')'
         )
         results.append({
@@ -334,6 +337,7 @@ def extract_vuln_report(zip_path, output_path, logs=None):
             'restoredFormats': restored,
             'removedFalsePositives': removed,
             'markedRows': marked_rows,
+            'markerCellCount': len(marked_cells),
         })
 
     if len(results) != len(TARGET_SHEETS):

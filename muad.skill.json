@@ -1,5 +1,6 @@
 {
   "name": "v2-sangfor-report-downloader",
+  "author": "徐湃",
   "version": "1.0.0",
   "runtime": "script",
   "description": "Download mssw platform summary tables (asset/incident/alert/vuln/weakpwd) for one customer, merge them into a single Excel report, and optionally drive the built-in PPT engine end-to-end to produce a deliverable .pptx deck (plus per-slide rewriting of an existing deck). Requires the mssw platform session.",

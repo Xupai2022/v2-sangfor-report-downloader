@@ -31,6 +31,7 @@ import base64
 import datetime
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -125,9 +126,14 @@ INNER_KEPT_ROWS = [row for row in INNER_ROWS if '误报' not in str(row[9])]
 OUTER_KEPT_ROWS = [row for row in OUTER_ROWS if '误报' not in str(row[9])]
 assert len(INNER_KEPT_ROWS) == 2 and len(OUTER_KEPT_ROWS) == 2, '每份各删掉一行误报'
 
-# 平台用**整行粉红**标「最近扫描新增漏洞」（表头那格的小字自己写着这条约定）。
-# 这里把内网那份的第 1 行数据涂上，钉住「搬表要透传标记色」这条（见 marker_colors.py）。
+# 平台用**粉色**标「最近扫描新增漏洞」（表头那格的小字自己写着这条约定）。两种形态都钉住
+# （用户口径 2026-10-30「按格透传」）：
+#   · 内网第 1 行数据 —— **整行**粉红（平台现在的做法）
+#   · 外网第 1 行数据 —— **只有「资产IP」那一格**粉红（平台若改成只标关键列，也只该那格粉）
+# 两种都得原样透传：多涂（把一格涂成整行）或少涂都算错。
 MARKED_INNER_ROW = 0
+MARKED_OUTER_ROW = 0
+MARKED_SINGLE_COLUMN = '资产IP'
 MARKED_COLOR = 'F2DCDB'
 
 # 第 3 张 sheet（诱饵）：表头与第 4 张逐字相同，行是它的**子集** + 一行独有行。
@@ -158,14 +164,19 @@ def build_source_workbook(path, header, rows, include_decoy=True):
         for row in aoa:
             sheet.append(row)
 
-        # 内网那份的第 4 张 sheet 上，把标记行涂成平台那种粉红（RGB 写法；
-        # 生产导出走的是调色板索引 61，两种写法都由 marker_colors 解析）
+        # 两张源表各涂一种标记形态（RGB 写法；生产导出走的是调色板索引 61，
+        # 两种写法都由 marker_colors 解析）：内网整行涂、外网只涂「资产IP」那一格
         if name == SOURCE_SHEET_NAME and rows is INNER_ROWS:
             fill = PatternFill(start_color=f'FF{MARKED_COLOR}', end_color=f'FF{MARKED_COLOR}',
                                fill_type='solid')
-            source_row = MARKED_INNER_ROW + 2  # 表头占第 1 行
+            marked_row = MARKED_INNER_ROW + 2  # 表头占第 1 行
             for col in range(1, len(header) + 1):
-                sheet.cell(row=source_row, column=col).fill = fill
+                sheet.cell(row=marked_row, column=col).fill = fill
+        if name == SOURCE_SHEET_NAME and rows is OUTER_ROWS:
+            fill = PatternFill(start_color=f'FF{MARKED_COLOR}', end_color=f'FF{MARKED_COLOR}',
+                               fill_type='solid')
+            single_col = header.index(MARKED_SINGLE_COLUMN) + 1
+            sheet.cell(row=MARKED_OUTER_ROW + 2, column=single_col).fill = fill
 
     workbook.save(path)
     return str(path)
@@ -330,23 +341,44 @@ def check_product(checker, result, inner_file, outer_file):
                   '内网那几行**除误报行外全在**、一行没少（取错 sheet 只会少行，不会报错）',
                   len(assets), len(INNER_KEPT_ROWS))
 
-    # 标记色透传（用户口径 2026-10-30）：源的整行粉红要跟着行一起搬进产物，
-    # 而且**不能串行** —— 只涂这一行，别的行照旧没底色。
+    # 标记色透传（用户口径 2026-10-30，按**格**）：源上怎么标，产物上就怎么标 ——
+    # 整行标的那行整行粉；只标一格的那行**只有那一格**粉（不能顺手把整行涂满），
+    # 没标过的行一个格都不粉。
     marked_output_row = MARKED_INNER_ROW + 2  # 表头占第 1 行
     marked_fills = {
         cell_fill_hex(inner.cell(row=marked_output_row, column=col))
         for col in range(1, len(INNER_HEADER) + 1)
     }
     checker.check(marked_fills == {MARKED_COLOR},
-                  '标记色行（最近扫描新增）整行粉红透传到产物，不是只剩一格/只剩一部分',
-                  json.dumps(sorted(marked_fills)), json.dumps([MARKED_COLOR]))
-    unmarked_row = 3 if marked_output_row != 3 else 2
+                  '源上整行标的行，产物上整行粉红（一格不少、也没有漏成半行）',
+                  json.dumps(sorted(marked_fills, key=str)), json.dumps([MARKED_COLOR]))
+
+    single_output_row = MARKED_OUTER_ROW + 2
+    single_col = OUTER_HEADER.index(MARKED_SINGLE_COLUMN) + 1
+    single_fills = {
+        col: cell_fill_hex(outer.cell(row=single_output_row, column=col))
+        for col in range(1, len(OUTER_HEADER) + 1)
+    }
+    checker.check(single_fills.get(single_col) == MARKED_COLOR
+                  and {color for col, color in single_fills.items() if col != single_col} == {None},
+                  f'源上只标「{MARKED_SINGLE_COLUMN}」那一格的行，产物上也**只**那一格粉'
+                  '（按格透传，不把整行涂满）',
+                  json.dumps(single_fills, ensure_ascii=False, sort_keys=True)[:160] + ' …')
+
+    unmarked_row = next(
+        row for row in range(2, 2 + len(INNER_KEPT_ROWS))
+        if row != marked_output_row
+    )
     checker.check(cell_fill_hex(inner.cell(row=unmarked_row, column=1)) != MARKED_COLOR,
                   '没被标过的那一行**不会**被顺手涂粉（判定是按源表底色，不是按行号猜）',
                   json.dumps(cell_fill_hex(inner.cell(row=unmarked_row, column=1))))
     checker.check(result['sheets'][0].get('markedRows') == [marked_output_row],
                   '返回值的 markedRows 报的就是这一行（不静默，方便日志里看见）',
                   json.dumps(result['sheets'][0].get('markedRows')), json.dumps([marked_output_row]))
+    checker.check(result['sheets'][1].get('markedRows') == [single_output_row],
+                  '外网那份只标了一格，markedRows 也只报这一行（同一行多个标记格只报一次）',
+                  json.dumps(result['sheets'][1].get('markedRows')),
+                  json.dumps([single_output_row]))
     return workbook
 
 
@@ -370,6 +402,10 @@ def check_idempotent(checker, bridge, fixture, output):
 
 
 def check_failures(checker, bridge, workdir):
+    # 验收产物只写可写根：集群上这个根是 Runtime Guard 注入的 SKILL_OUTPUT_DIR。
+    output_root = (os.environ.get('SKILL_OUTPUT_DIR') or '').strip()
+    if output_root and not os.path.abspath(str(workdir)).startswith(os.path.abspath(output_root) + os.sep):
+        raise RuntimeError(f'验收工作目录必须位于 SKILL_OUTPUT_DIR 下: {workdir}')
     """五条打包/中间件形态没对上时的失败口径 —— 都不许"退化到能跑就行"。"""
     checker.section('3】契约没对上时当场抛（不退化、不覆盖）')
 
@@ -433,6 +469,10 @@ def check_failures(checker, bridge, workdir):
 
 
 def _write_text(path, text):
+    # 只允许写可写根（集群是 SKILL_OUTPUT_DIR）；越界当场报错，不静默写只读的 skill 根。
+    output_root = (os.environ.get('SKILL_OUTPUT_DIR') or '').strip()
+    if output_root and not os.path.abspath(str(path)).startswith(os.path.abspath(output_root) + os.sep):
+        raise RuntimeError(f'验收产物必须写在 SKILL_OUTPUT_DIR 下: {path}')
     path.write_text(text, encoding='utf-8')
     return path
 
@@ -445,7 +485,11 @@ def main():
         raise SystemExit('缺少 bridge（谁调我、到哪回溯）')
 
     checker = Checker()
-    workdir = Path(tempfile.mkdtemp(prefix='v2-vuln-extract-'))
+    # 集群上 skill 根只读、/tmp 不持久：有 SKILL_OUTPUT_DIR 就把验收产物落那里。
+    workdir = Path(tempfile.mkdtemp(
+        prefix='v2-vuln-extract-',
+        dir=(os.environ.get('SKILL_OUTPUT_DIR') or None),
+    ))
     try:
         inner = build_source_workbook(workdir / 'src-inner.xlsx', INNER_HEADER, INNER_ROWS)
         outer = build_source_workbook(workdir / 'src-outer.xlsx', OUTER_HEADER, OUTER_ROWS)

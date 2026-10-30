@@ -8,7 +8,8 @@ description: 从 mssw 平台下载资产/事件/告警/漏洞/弱密码总表、
 一条命令出交付物：**下载总表 → 合并 Excel →（可选）驱动内置 PPT 引擎出 `.pptx`**。
 
 > 本 skill 绑定 **mssw** 平台。登录态由 muad（session-manager）代管，脚本自动取得 ——
-> **无需也不得手动粘贴 Cookie 或准备 Cookie 文件**。业务入口由 `config/api_config.json` 决定。
+> **无需也不得手动粘贴 Cookie 或准备 Cookie 文件**。业务入口由 session-manager 返回的
+> `requestProfile.baseUrl` 决定（Console 平台设置里配的那个），Skill 不写死入口。
 
 > ⏱ **本 skill 是前台任务**（`muad.skill.json` 不声明 `longTask`）：命令**跑完才返回**，
 > 一条命令含「下载总表 → 合并 Excel → 生成 PPT」，耗时**几分钟到几十分钟**。

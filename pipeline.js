@@ -744,8 +744,8 @@ generate 专有:
                              （= 这次不按 HW 窗口统计）。
   --cookie-path <p>          MSSW cookie 文件；**传了即本地模式**，不传则走集群
                              （集群由 session-manager 代管登录态，默认如此）
-  --mssw-base-url <origin>   MSSW 入口；裸域名默认补 https://，集群入口要写完整
-                             origin（如 http://mssw-inner.sangfor.com.cn:30001）
+  --mssw-base-url <origin>   MSSW 入口覆盖；裸域名默认补 https://，集群入口要写完整
+                             origin（默认取 session-manager 的 requestProfile.baseUrl）
   --mssw-host-header <h>     Host 头覆盖（本地默认=域名，集群默认=统一 Host 头）
   --mssw-referer-path <p>    Referer 路径，默认 /index.html
   --excel <p>                已有的 *_report.xlsx；给了就跳过下载

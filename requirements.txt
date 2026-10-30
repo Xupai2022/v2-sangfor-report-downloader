@@ -4,6 +4,10 @@ openpyxl>=3.1.0
 # 可选：仅报告美化加水印时用到（beautify_report.py 传 watermark 才 import）
 # Pillow>=10.0
 
+# 分页导出（scripts/mssw_asset_paged_export.py）走自建 skill 规范要求的
+# requests；与上面 vendor 闭包里的 httpx 无关，别混用。
+requests>=2.31.0
+
 # ---------------------------------------------------------------------------
 # PPT 引擎链路（pptgen/ 驱动 vendor/ 里的快照）
 #

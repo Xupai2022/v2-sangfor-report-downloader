@@ -25,7 +25,6 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 
 const workdir = require('./workdir');
-const apiConfig = require('./api_config');
 const { resolvePlatform } = require('./mssw_client');
 const { SKILL_NAME, PLATFORM } = require('./skill_meta');
 
@@ -185,6 +184,22 @@ function logSessionFingerprint(session, logger) {
       logger(`[session] 凭据环境(${key}): ${value.trim()}`);
     }
   }
+
+  // 平台入口在 requestProfile 里（Console 平台设置的 baseUrl / Host 头 / referer）。
+  // 只打地址，不打 cookie —— 排「403 / 9451」时第一眼要看的就是它和 cookie 的 domain 是否同环境。
+  const profile = requestProfileFor(session);
+  if (profile) {
+    if (typeof profile.baseUrl === 'string' && profile.baseUrl.trim()) {
+      logger(`[session] 平台入口(baseUrl): ${profile.baseUrl.trim()}`);
+    }
+    const hostHeader = hostHeaderFromProfile(profile);
+    logger(`[session] 平台 Host 头: ${hostHeader || '（不发）'}`);
+    if (typeof profile.referer === 'string' && profile.referer.trim()) {
+      logger(`[session] 平台 referer: ${profile.referer.trim()}`);
+    }
+  } else {
+    logger('[session] 登录态里没有 requestProfile（session-manager 版本过旧？）');
+  }
 }
 
 /**
@@ -192,9 +207,11 @@ function logSessionFingerprint(session, logger) {
  *
  * 文件权限 0o600（Windows 上无效，Linux 有效）。整轮运行期间必须存活：
  * 三个 exportMssw*List 与 Python 子进程都会按路径重读它。
+ *
+ * `session` 由 `readSessionState()` 一次取回后共用 —— 平台入口（requestProfile）
+ * 与 cookie 必须来自**同一份**登录态，否则会拿 A 环境的 cookie 打 B 环境的入口。
  */
-async function materializeMsswCookie(logger = () => {}) {
-  const session = readSessionState();
+async function materializeMsswCookie(session, logger = () => {}) {
   const cookieString = cookieStringFor(session, PLATFORM);
   if (!cookieString) {
     throw authError(`登录态缺少 ${PLATFORM} 平台 cookie（请先确认 ${PLATFORM} 平台已绑定并登录）`);
@@ -208,8 +225,49 @@ async function materializeMsswCookie(logger = () => {}) {
   return filePath;
 }
 
+/** 取 session.platforms.<platform>.requestProfile；老版本 session-manager 可能没有。 */
+function requestProfileFor(session, platform = PLATFORM) {
+  const section = (session && session.platforms && session.platforms[platform]) || null;
+  const profile = section && section.requestProfile;
+  return profile && typeof profile === 'object' && !Array.isArray(profile) ? profile : null;
+}
+
 /**
- * 本地模式的平台描述符：**完全不读集群 config**。
+ * 从 requestProfile.hostHeader 取 Host 头。
+ *
+ * 平台侧约定是对象（如 `{ "Host": "inner.sangfor.com.cn" }`），这里兼容字符串写法；
+ * 取不到返回 undefined —— 交给 resolvePlatform 按 origin 推导，不凭空造头。
+ */
+function hostHeaderFromProfile(profile) {
+  const raw = profile && profile.hostHeader;
+  if (typeof raw === 'string') {
+    return raw.trim() || undefined;
+  }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const key = Object.keys(raw).find((item) => item.toLowerCase() === 'host');
+    if (key) {
+      const value = String(raw[key] || '').trim();
+      return value || undefined;
+    }
+  }
+  return undefined;
+}
+
+/** requestProfile.referer 是完整 URL；平台描述符只存路径，与 origin 拼。 */
+function refererPathFromProfile(profile) {
+  const referer = profile && typeof profile.referer === 'string' ? profile.referer.trim() : '';
+  if (!referer) {
+    return undefined;
+  }
+  try {
+    return new URL(referer).pathname || undefined;
+  } catch (error) {
+    return undefined;
+  }
+}
+
+/**
+ * 本地模式的平台描述符。
  *
  * host 头等于域名（除非显式传 msswHostHeader），origin 走 https://<域名>。
  * 让本地也吃集群的统一 Host 头会把请求打挂。
@@ -223,16 +281,35 @@ function resolveLocalPlatform(options = {}) {
 }
 
 /**
- * 集群模式的平台描述符：origin / Host 头 / referer 均来自 config/api_config.json
- * （各自支持 env 覆盖），显式 CLI 参数优先（便于集群上排障）。
+ * 集群模式的平台描述符：**入口一律取 session-manager 的 requestProfile**。
+ *
+ * 规范要求平台 baseUrl 在 Console 的平台设置里配置，Skill 不自己写死入口
+ * （否则 Console 里换环境、换域名，Skill 还打旧地址）。所以这里：
+ *   - `requestProfile.baseUrl` → origin
+ *   - `requestProfile.hostHeader`（通常 `{"Host": "..."}`）→ 统一 Host 头
+ *   - `requestProfile.referer` → referer 路径
+ *
+ * 显式 CLI 参数（`--mssw-base-url` 等）仍然优先，只用于集群上排障；
+ * 老版本 session-manager 不带 `requestProfile` 时**直接报错**，不回退到任何
+ * 写死的入口 —— 拿旧地址静默重试只会把「环境配错」拖成「登录态失效」。
  */
-function resolveClusterPlatform(options = {}) {
+function resolveClusterPlatform(profile, options = {}) {
+  const stateBaseUrl = profile && typeof profile.baseUrl === 'string' ? profile.baseUrl.trim() : '';
+  const baseUrl = options.msswBaseUrl || stateBaseUrl;
+  if (!baseUrl) {
+    throw authError(
+      `session-manager 返回的 ${PLATFORM} 登录态里没有 requestProfile.baseUrl。` +
+      `平台入口应在 Console 的「${PLATFORM}」平台设置里配置（baseUrl），` +
+      `Skill 不再读本地 config。请联系管理员补齐后重试。`,
+      NOT_CONFIGURED_CODE
+    );
+  }
   return resolvePlatform({
-    msswBaseUrl: options.msswBaseUrl || apiConfig.getOrigin(PLATFORM),
+    msswBaseUrl: baseUrl,
     msswHostHeader: options.msswHostHeader !== undefined
       ? options.msswHostHeader
-      : apiConfig.getHostHeader(PLATFORM),
-    msswRefererPath: options.msswRefererPath || apiConfig.getRefererPath(PLATFORM)
+      : hostHeaderFromProfile(profile),
+    msswRefererPath: options.msswRefererPath || refererPathFromProfile(profile)
   });
 }
 
@@ -261,10 +338,12 @@ async function resolveAuth(input = {}, logger = () => {}) {
     return { mode: 'local', cookiePath: cookiePath.trim(), platform, source: 'cli' };
   }
 
-  const platform = resolveClusterPlatform(input);
+  // 集群：登录态只取一次，入口与 cookie 都出自这一份，避免跨环境影响。
+  const session = readSessionState();
+  const platform = resolveClusterPlatform(requestProfileFor(session), input);
   logger('[mode] 集群（session-manager 代管登录态）');
   logger(`[platform] ${platform.origin}（host 头 ${platform.hostHeader || '（不发）'}）`);
-  const privateCookiePath = await materializeMsswCookie(logger);
+  const privateCookiePath = await materializeMsswCookie(session, logger);
   return { mode: 'cluster', cookiePath: privateCookiePath, platform, source: 'session-manager' };
 }
 
@@ -280,6 +359,7 @@ module.exports = {
   readSessionState,
   cookieStringFor,
   materializeMsswCookie,
+  requestProfileFor,
   resolveLocalPlatform,
   resolveClusterPlatform,
   resolveAuth,

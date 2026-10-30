@@ -385,8 +385,8 @@ function normalizeBaseUrl(value) {
  * 归一化成完整 origin（含 scheme）。
  *
  * 裸域名（如 sitmssw.soar.sangfor.com.cn）→ 补 https://，与历史行为**逐字相同**；
- * 已带 scheme 的原样保留 —— 集群入口是明文 http + 端口的
- * http://mssw-inner.sangfor.com.cn:30001（入口按环境不同，见 config/api_config.json）。
+ * 已带 scheme 的原样保留 —— 集群入口可能是明文 http + 端口，
+ * 由 session-manager 的 requestProfile.baseUrl 给出（Console 平台设置，按环境不同）。
  */
 function resolveOrigin(value) {
   const raw = String(value || '').trim().replace(/\/+$/, '');
@@ -418,7 +418,7 @@ function hostHeaderFor(origin, explicit) {
  *
  * 这是「本地 vs 集群」的唯一差异注入点：
  * - 本地：不传 msswHostHeader → host 头等于域名，origin 走 https://<域名>
- * - 集群：由 session.js 传入内网 origin + 统一 Host 头 inner.sangfor.com.cn
+ * - 集群：由 session.js 从 session-manager 的 requestProfile 传入 origin + Host 头
  */
 function resolvePlatform(options = {}) {
   const origin = resolveOrigin(options.msswBaseUrl || options.msswOrigin);

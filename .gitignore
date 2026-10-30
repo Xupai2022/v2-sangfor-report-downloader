@@ -12,6 +12,8 @@ mssw_cookies.txt
 *_exposed.xlsx
 *_response_*.json
 *.zip
+# WPS 打开 xlsx 时生成的独占锁文件，本机状态，不是仓库内容
+~$*.xlsx
 downloads/
 
 # 本地跑出来的中间产物（导出 response、调试用的 xlsx），不是仓库内容。

@@ -58,8 +58,8 @@ function rejectHint(reject, options) {
       + '请在登录状态下重新导出 cookie 后重跑；刚导出仍报此错，再查 --mssw-base-url 是不是该会话所在的环境。';
   }
   return `集群模式：这份登录态不被该入口认可（${where}）。`
-    + '大概率是 config/api_config.json 里 platforms.mssw.origin 打错环境 —— 同一份 cookie 换个入口就通/不通。'
-    + '先用 REPORT_DOWNLOADER_MSSW_BASE_URL 覆盖验证，再回填 config。';
+    + '大概率是 Console 的 mssw 平台设置里 baseUrl 配错环境（session-manager 的 requestProfile 会把它原样带出来）——'
+    + '同一份 cookie 换个入口就通/不通。先用 --mssw-base-url 指定正确入口验证，再让管理员改 Console 的平台设置。';
 }
 
 /**

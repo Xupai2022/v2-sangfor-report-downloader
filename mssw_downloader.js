@@ -7,7 +7,7 @@
  * 运行模式看**有没有传 `--cookie-path`**：
  *
  *   不传（默认，集群）  登录态交给 session-manager 代管，入口 origin 与统一 Host 头
- *                       取自 config/api_config.json。见 session.js。
+ *                       取自它返回的 requestProfile（Console 平台设置）。见 session.js。
  *   传了（本地）        直接读那个 cookie txt，走 https://<域名>，与历史行为逐字一致；
  *                       换环境用 --mssw-base-url（现在也收完整 origin，含 scheme + 端口）。
  *
@@ -164,7 +164,7 @@ function printHelp() {
 
 运行模式（看有没有传 --cookie-path）:
   不传 --cookie-path   集群模式（默认）：登录态由 session-manager 代管，
-                       入口域名/Host 头取 config/api_config.json。
+                       入口与 Host 头取登录态里的 requestProfile（Console 平台设置）。
   传 --cookie-path     本地模式：直接读该 cookie 文件（或目录里最新的 txt），
                        走 https://<域名>，行为与历史完全一致。
 
@@ -199,8 +199,9 @@ Options:
                             不传/少传：名字格 D3/D4/D5 空着的那几个不写值并记入错误列表；
                             **算出来的**格（D6:D9 / G6/H6/I6 / G10 / G14）按 0 落值（用户口径 2026-10-12）。
                             D10/D12/D15/D17/D11 不受它影响。
-  --mssw-base-url <origin>  MSSW 入口。裸域名默认加 https://（集群内网入口带端口，
-                            用完整 origin，如 http://mssw-inner.sangfor.com.cn:30001）
+  --mssw-base-url <origin>  MSSW 入口覆盖（集群默认取 session-manager 的 requestProfile.baseUrl）。
+                            裸域名默认加 https://（内网入口带端口时用完整 origin，如
+                            http://<内网域名>:<端口>）
   --mssw-host-header <h>    Host 头覆盖。默认本地=域名、集群=统一 Host 头；
                             传空串表示不发 Host 头
   --mssw-referer-path <p>   Referer 路径，默认 /index.html

@@ -31,9 +31,9 @@ npm 依赖（SheetJS 社区版），顺带修掉它解决不了/悄悄丢掉的�
 路径，值/格式/列宽/行高/合并单元格随 sheet 一起原样保留。
 （漏洞表/弱密码表的时间列实测是**字符串**，本来就没有数字格式可还原。）
 
-**唯一一种会被搬过去的填充**：标记色行（漏洞表整行粉红 = 「最近扫描新增漏洞」，
-平台把这条约定写在了表头里）。识别与涂色都在 scripts/marker_colors.py，只认同一种
-显式约定、不搬其它字体/填充/边框 —— 其余观感仍由美化那一步统一决定。
+**唯一一种会被搬过去的填充**：标记色格（漏洞表的粉红 = 「最近扫描新增漏洞」，平台把这条
+约定写在了表头里）。按**格**透传而不是按行，识别与涂色都在 scripts/marker_colors.py；
+只认同一种显式约定、不搬其它字体/填充/边框 —— 其余观感仍由美化那一步统一决定。
 
 各表落成 sheet 之后，落盘之前还有一步：
 
@@ -130,7 +130,8 @@ from openpyxl.utils import get_column_letter
 from openpyxl.utils.datetime import to_excel
 
 from _path_helper import decode_argv
-from marker_colors import apply_marker_fill, marker_label, row_marker_color
+from marker_colors import (MARKER_COLORS, apply_marker_fill, cell_fill_hex,
+                           marked_row_numbers)
 
 # 模板骨架（R3 + R3a）：缺任何一个都早失败，避免产出缺 sheet 的报告还看起来"成功"。
 # 顺序照抄 data.xlsx 模板的真实顺序（R3：sheet 顺序由模板定，代码不重排）。
@@ -456,10 +457,11 @@ def rebuild_sheet(target_sheet, source_sheet, drop_headers=()):
       要么别写进下载件、要么在搬的这一处剔掉 —— 别指望下游看见它却假装没看见。
       列宽是按**剔完**的列算的，不是按剔之前。
 
-    :returns: (data_rows, restored_formats, dropped_headers, marked_rows) —— 第三项是
+    :returns: (data_rows, restored_formats, dropped_headers, marked_cells) —— 第三项是
       **真剔掉的**列名（表里本来就没有那一列时是空列表，那不是异常：这一步没算出月份列
-      时就是这样）；第四项是搬完之后带标记色的行号（平台用整行粉红标「最近扫描新增
-      漏洞」，见 marker_colors.py），没有标记行时是空列表。
+      时就是这样）；第四项是搬完之后带标记色的格子 `{(输出行, 输出列): 'RRGGBB'}`
+      （平台用粉红标「最近扫描新增漏洞」，见 marker_colors.py；按格不按行），
+      没有标记格时是空 dict。
     """
     numbered = collect_source_rows_with_numbers(source_sheet)
     rows = split_leading_blank_rows([(values, formats) for _r, values, formats in numbered])
@@ -470,6 +472,8 @@ def rebuild_sheet(target_sheet, source_sheet, drop_headers=()):
     numbered = numbered[len(numbered) - len(rows):]
 
     dropped = []
+    drop = set()
+    source_column_count = max((len(values) for values, _formats in rows), default=0)
     if drop_headers:
         wanted = {str(name).strip() for name in drop_headers}
         header = [
@@ -514,19 +518,22 @@ def rebuild_sheet(target_sheet, source_sheet, drop_headers=()):
                 cell.number_format = number_format
                 restored += 1
 
-    # 标记色行透传（用户口径 2026-10-30）：平台用整行粉红标「最近扫描新增漏洞」，
+    # 标记格透传（用户口径 2026-10-30）：平台把那几格涂粉标「最近扫描新增漏洞」，
     # 那是平台写在表头里的显式约定，不是样式噪声 —— 搬表时丢了，报告上就再也看不出来。
+    # 按**格**透传、不按行：平台标整行，报告上就是整行；哪天它只标「发现时间」那一格，
+    # 报告上也只该那一格是粉的（见 marker_colors.py）。
     # 表头行不参与判定；输出行号 = 该行在 numbered 里的位置（表头固定是第 1 行）。
-    marked_rows = []
-    column_count = len(widths)
+    # 源列号 -> 目标列号按剔完列的位移算：kept_source_indexes 的第 n 项落在第 n+1 列。
+    kept_source_indexes = [index for index in range(source_column_count) if index not in drop]
+    marked_cells = {}
     for output_row, (source_row, _values, _formats) in enumerate(numbered[1:], start=2):
-        color = row_marker_color(source_sheet, source_row)
-        if not color:
-            continue
-        apply_marker_fill(target_sheet, output_row, 1, column_count, color)
-        marked_rows.append(output_row)
+        for target_col, source_index in enumerate(kept_source_indexes, start=1):
+            color = cell_fill_hex(source_sheet.cell(row=source_row, column=source_index + 1))
+            if color in MARKER_COLORS:
+                apply_marker_fill(target_sheet, output_row, target_col, color)
+                marked_cells[(output_row, target_col)] = color
 
-    return len(values_rows) - 1, restored, dropped, marked_rows
+    return len(values_rows) - 1, restored, dropped, marked_cells
 
 
 # ---------------------------------------------------------------------------
@@ -628,9 +635,10 @@ def build_report(payload, logs=None):
             # 交付物的「事件表」sheet 上不要（用户口径 2026-10-14）。五个时长列照旧保留 ——
             # 它们是既有交付物形态的一部分。
             dropped_headers = DROP_EVENT_COLUMNS if table_type == 'event' else ()
-            data_rows, restored, dropped, marked_rows = rebuild_sheet(
+            data_rows, restored, dropped, marked_cells = rebuild_sheet(
                 target_sheet, source_sheet, dropped_headers
             )
+            marked_rows = marked_row_numbers(marked_cells)
             if data_rows <= 0:
                 # 空表也是有效结果（该时间段确实没有数据），但要说清楚，不静默
                 logs.append(f'[报告] {sheet_name} 源文件无数据行: {source_base}')
@@ -639,7 +647,8 @@ def build_report(payload, logs=None):
                 f'(sheet "{source_sheet_name}", 表头第 1 行 + {data_rows} 行数据'
                 + (f'，还原 {restored} 个单元格格式' if restored else '')
                 + (f'，剔掉中间列 {"、".join(f"「{name}」" for name in dropped)}' if dropped else '')
-                + (f'，透传标记色行 {len(marked_rows)} 行' if marked_rows else '')
+                + (f'，透传标记色 {len(marked_cells)} 格'
+                   f'（{len(marked_rows)} 行）' if marked_cells else '')
                 + ')'
             )
             sheets.append({
@@ -651,6 +660,7 @@ def build_report(payload, logs=None):
                 'restoredFormats': restored,
                 'droppedColumns': dropped,
                 'markedRows': marked_rows,
+                'markerCellCount': len(marked_cells),
             })
 
     # 「数据统计」sheet 的取值层。writes 缺席时不写任何格子（M1 行为，模板原样）——

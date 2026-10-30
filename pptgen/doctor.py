@@ -524,6 +524,8 @@ def check_llm():
     if not snapshot["api_key_set"]:
         return {"ok": False, "skipped": True, "problem": "OPENAI_API_KEY 为空"}
 
+    # openai SDK 的 http_client 只接受 httpx.Client，换成 requests 传不进去；
+    # 这里是 **LLM 网关**的传输层，不是业务平台调用（业务平台一律走 requests）。
     import httpx
     import openai
 
@@ -599,40 +601,48 @@ def list_models():
     if not snapshot["api_key_set"]:
         return {"ok": False, "problem": "OPENAI_API_KEY 为空", **report}
 
-    import httpx
+    import requests
 
     base = snapshot["openai_base_url"].rstrip("/")
     headers = {"Authorization": f"Bearer {engine.settings.openai_api_key}"}
-    timeout = httpx.Timeout(30.0, connect=8.0)
+    # (connect, read)：与上面 check_llm 的诊断口径一致 —— 建连要快，别让「连不上」
+    # 伪装成「模型很慢」。
+    timeout = (8.0, 30.0)
+    session = requests.Session()
+    # 引擎的 http client 是 trust_env=False：进程里的 HTTP_PROXY 一律不生效，
+    # 这里必须同口径，否则 doctor 说「通」而正式跑不通。
+    session.trust_env = False
     try:
-        with httpx.Client(trust_env=False, timeout=timeout) as client:
-            response = client.get(base + "/models", headers=headers)
-            if response.status_code != 200:
-                return {"ok": False, "problem": f"GET /models → HTTP {response.status_code}",
-                        "hint": "BASE_URL 是否正确（通常要以 /v1 结尾）", **report}
-            all_ids = sorted(entry.get("id", "") for entry in response.json().get("data") or [])
+        response = session.get(base + "/models", headers=headers, timeout=timeout)
+        if response.status_code != 200:
+            return {"ok": False, "problem": f"GET /models → HTTP {response.status_code}",
+                    "hint": "BASE_URL 是否正确（通常要以 /v1 结尾）", **report}
+        all_ids = sorted(entry.get("id", "") for entry in response.json().get("data") or [])
 
-            usable, refused = [], {}
-            for model_id in all_ids[:40]:
+        usable, refused = [], {}
+        for model_id in all_ids[:40]:
+            try:
+                probe = session.post(
+                    base + "/chat/completions", headers=headers,
+                    json={"model": model_id, "max_tokens": 1,
+                          "messages": [{"role": "user", "content": "1"}]},
+                    timeout=timeout,
+                )
+            except requests.exceptions.RequestException as exc:
+                refused[model_id] = f"{type(exc).__name__}"
+                continue
+            if probe.status_code == 200:
+                usable.append(model_id)
+            else:
                 try:
-                    probe = client.post(
-                        base + "/chat/completions", headers=headers,
-                        json={"model": model_id, "max_tokens": 1,
-                              "messages": [{"role": "user", "content": "1"}]},
-                    )
-                except httpx.HTTPError as exc:
-                    refused[model_id] = f"{type(exc).__name__}"
-                    continue
-                if probe.status_code == 200:
-                    usable.append(model_id)
-                else:
-                    try:
-                        refused[model_id] = f"{probe.status_code} {probe.json()['error']['message'][:60]}"
-                    except Exception:  # noqa: BLE001
-                        refused[model_id] = f"{probe.status_code} {probe.text[:60]}"
-    except httpx.HTTPError as exc:
+                    refused[model_id] = f"{probe.status_code} {probe.json()['error']['message'][:60]}"
+                except Exception:  # noqa: BLE001
+                    refused[model_id] = f"{probe.status_code} {probe.text[:60]}"
+    except requests.exceptions.RequestException as exc:
         return {"ok": False, "problem": f"{type(exc).__name__}: {exc}",
                 "hint": "trust_env=False，进程里的 HTTP_PROXY 不生效", **report}
+    finally:
+        session.close()
 
     report.update(
         ok=True,

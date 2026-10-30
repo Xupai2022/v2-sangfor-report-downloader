@@ -21,11 +21,11 @@ MSSW 资产分批导出脚本（方案 B：通过 ids 分批走 export 接口）
 
 用法：
     python mssw_asset_paged_export.py \
-        --cookie-path <cookie.txt> \
-        --base-url sitmssw.soar.sangfor.com \
         --company-id 88602882 \
-        --output-dir tmp/exports \
-        [--host-header inner.sangfor.com.cn] \
+        [--cookie-path <cookie.txt>] \
+        [--base-url <平台入口，如 https://<域名> 或 http://<内网入口>:<端口>>] \
+        [--output-dir tmp/exports] \
+        [--host-header <统一 Host 头>] \
         [--referer-path /index.html] \
         [--batch-size 1000] \
         [--list-page-size 1000] \
@@ -34,10 +34,18 @@ MSSW 资产分批导出脚本（方案 B：通过 ids 分批走 export 接口）
         [--keep-temp] \
         [--no-cache]
 
---base-url 既收裸域名（默认补 https://，与历史行为一致），也收完整 origin
-（如集群入口 http://mssw-inner.sangfor.com.cn:30001，带 scheme 与端口）。
+--cookie-path / --base-url 可省略：省略时按 skill 名调
+`session-manager get-state` 取同一份登录态里的 cookie 与 requestProfile.baseUrl。
+集群正式入口是 node mssw_downloader.js，它总把两者传进来，本脚本走不到兜底分支。
+
+--base-url 收裸域名（补 https://，与历史行为一致），也收完整 origin
+（带 scheme 与端口）。**入口不写死在本脚本里** —— 来自调用方或
+session-manager 的 requestProfile.baseUrl。
 集群里 nginx 按 Host 选虚拟主机，所以还要 --host-header 传统一 Host 头；
-不传则不额外发 Host 头（裸 urlopen 行为，本地 SIT 就是这样）。
+不传则取 requestProfile.hostHeader，登录态里也没有就不额外发 Host 头（本地 SIT 就是这样）。
+
+业务请求统一走 `requests`：Runtime Guard 会对 Console 配置的 baseUrl 主机
+自动注入每请求新的 `TraceId` / `X-Csrftoken` 并计数，本脚本不手工拼这两个头。
 """
 import argparse
 import json
@@ -45,17 +53,20 @@ import os
 import queue
 import shutil
 import signal
-import ssl
 import sys
 import tempfile
 import threading
 import time
-import urllib.request
-import urllib.error
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import requests
+import urllib3
 from openpyxl import load_workbook, Workbook
+
+# 平台内网普遍是自签证书：和原 urllib 实现一致，只校验连通、不校验证书链。
+# 同时关掉 urllib3 对「未校验 HTTPS」的逐请求告警，免得把 stderr 刷满。
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # 集群上 skill 根是只读挂载：绝不让 Python 往那儿写 __pycache__。
 # 必须放在 import 本地模块（_path_helper）之前，否则它自己就已经先写进去了。
@@ -149,23 +160,46 @@ DEFAULT_EXPORT_FIELDS = {
 IDS_CACHE_TTL_SECONDS = 3600
 
 
-# 裸域名时的默认值（与历史行为一致：补 https://）。
-DEFAULT_BASE_URL = 'sitmssw.soar.sangfor.com'
-
 # Referer 的默认路径，与 origin 拼成 '<origin>/index.html'（与 mssw_client.js 同源）。
 DEFAULT_REFERER_PATH = '/index.html'
+
+
+def output_root():
+    """可写根：集群由 Runtime Guard 注入 SKILL_OUTPUT_DIR；本地未注入时返回空串。
+
+    规范要求所有中间件/缓存只写这个根：skill 根在集群上是只读挂载，
+    /tmp 不隔离也不持久。
+    """
+    return (os.environ.get('SKILL_OUTPUT_DIR') or '').strip()
+
+
+def work_temp_parent():
+    """`tempfile.mkdtemp` 的父目录：集群落在 SKILL_OUTPUT_DIR，本地交给系统临时目录。"""
+    root = output_root()
+    if not root:
+        return None
+    os.makedirs(root, exist_ok=True)
+    return root
+
+
+def _path_under(root, path):
+    root_abs = os.path.abspath(root)
+    return os.path.abspath(path) == root_abs or os.path.abspath(path).startswith(root_abs + os.sep)
 
 
 def resolve_origin(value):
     """把 --base-url 归一到 origin。
 
-    裸域名 → 补 `https://`（与历史逐字一致，SIT 那套是 https）；
+    裸域名 → 补 `https://`（与历史逐字一致）；
     已经是 origin（带 scheme） → 原样保留，端口和 scheme 都不能吞掉 ——
-    集群入口 http://mssw-inner.sangfor.com.cn:30001 就是靠这个把明文 http 和端口带进来的。
+    集群入口可能是明文 http + 端口，靠这个把 scheme 和端口带进来。
+
+    入口**不在本脚本里兜底**：集群由 Node 侧从 session-manager 的
+    requestProfile.baseUrl 取，本地由 --mssw-base-url 传。缺失就是配置错，直接抛。
     """
     raw = (value or '').strip().rstrip('/')
     if not raw:
-        return f'https://{DEFAULT_BASE_URL}'
+        raise ValueError('缺少 --base-url：平台入口应由调用方从 session-manager 的 requestProfile.baseUrl 传入')
     if raw.lower().startswith(('http://', 'https://')):
         return raw
     return f'https://{raw}'
@@ -191,11 +225,6 @@ def build_headers(cookie_str, origin, company_id, host_header='', referer_path=D
     return headers
 
 
-_SSL_CTX = ssl.create_default_context()
-_SSL_CTX.check_hostname = False
-_SSL_CTX.verify_mode = ssl.CERT_NONE
-
-
 def _endpoint_of(url):
     """接口路径（不含 query）—— 报错里必须说清是哪个接口。
 
@@ -210,34 +239,27 @@ def _endpoint_of(url):
 
 def post_json(url, body, headers, timeout=60):
     data = json.dumps(body, ensure_ascii=False).encode('utf-8')
-    req = urllib.request.Request(url, data=data, headers=headers, method='POST')
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
-            raw = resp.read().decode('utf-8')
-            return json.loads(raw)
-    except urllib.error.HTTPError as e:
-        body_text = ''
-        try:
-            body_text = e.read().decode('utf-8', errors='ignore')
-        except Exception:
-            pass
-        raise RuntimeError(f'HTTP {e.code} {e.reason} [POST {_endpoint_of(url)}]: {body_text[:500]}')
-    except urllib.error.URLError as e:
-        raise RuntimeError(f'URLError [POST {_endpoint_of(url)}]: {e.reason}')
+        resp = requests.post(url, data=data, headers=headers, timeout=timeout, verify=False)
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f'请求失败 [POST {_endpoint_of(url)}]: {e}')
+    if resp.status_code >= 400:
+        raise RuntimeError(
+            f'HTTP {resp.status_code} {resp.reason} [POST {_endpoint_of(url)}]: {resp.text[:500]}'
+        )
+    return resp.json()
 
 
 def download_binary(url, headers, timeout=120):
-    req = urllib.request.Request(url, headers=headers, method='GET')
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
-            return resp.read()
-    except urllib.error.HTTPError as e:
-        body_text = ''
-        try:
-            body_text = e.read().decode('utf-8', errors='ignore')
-        except Exception:
-            pass
-        raise RuntimeError(f'下载失败 HTTP {e.code} {e.reason} [GET {_endpoint_of(url)}]: {body_text[:500]}')
+        resp = requests.get(url, headers=headers, timeout=timeout, verify=False)
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f'下载失败 [GET {_endpoint_of(url)}]: {e}')
+    if resp.status_code >= 400:
+        raise RuntimeError(
+            f'下载失败 HTTP {resp.status_code} {resp.reason} [GET {_endpoint_of(url)}]: {resp.text[:500]}'
+        )
+    return resp.content
 
 
 def fetch_total(origin, headers, search_type):
@@ -310,6 +332,11 @@ def load_ids_cache(path, expected_total):
 
 
 def save_ids_cache(path, ids, total):
+    # 缓存只能落在可写根（集群是 SKILL_OUTPUT_DIR）：调用方给的路径越界时拉回根下同名文件，
+    # 绝不写进只读的 skill 根。
+    root = output_root()
+    if root and not _path_under(root, path):
+        path = os.path.join(root, os.path.basename(path))
     try:
         with open(path, 'w', encoding='utf-8') as f:
             json.dump({'total': int(total), 'cached_at': time.time(), 'ids': [int(i) for i in ids]}, f)
@@ -442,6 +469,10 @@ def export_batch(origin, headers, search_type, ids_chunk, export_fields):
 def download_batch(origin, headers, filename, dest_path):
     url = f'{origin}/apps/asset/view/asset/download_file?file={urllib.parse.quote(filename)}'
     data = download_binary(url, headers, timeout=120)
+    # 落盘目标同样只允许在可写根（集群是 SKILL_OUTPUT_DIR）下；越界就拉回根下同名文件。
+    root = output_root()
+    if root and not _path_under(root, dest_path):
+        dest_path = os.path.join(root, os.path.basename(dest_path))
     with open(dest_path, 'wb') as f:
         f.write(data)
     return dest_path
@@ -602,7 +633,7 @@ def __export_search_type_impl(origin, headers, search_type, output_dir, batch_si
     total_batches = (len(ids) + batch_size - 1) // batch_size
     log_progress(f'[export] {search_type} 开始分批导出: {len(ids)} ids -> {total_batches} 批 (batch_size={batch_size}, export_concurrency={concurrency}, download_concurrency={concurrency})')
 
-    temp_dir = tempfile.mkdtemp(prefix=f'mssw_paged_{search_type}_')
+    temp_dir = tempfile.mkdtemp(prefix=f'mssw_paged_{search_type}_', dir=work_temp_parent())
     log_progress(f'[export] 临时目录: {temp_dir}')
 
     batches = []
@@ -786,15 +817,20 @@ def __export_search_type_impl(origin, headers, search_type, output_dir, batch_si
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cookie-path', required=True)
-    parser.add_argument('--base-url', default='sitmssw.soar.sangfor.com',
-                        help='裸域名（补 https://）或完整 origin（含 scheme + 端口）')
-    parser.add_argument('--host-header', default='',
-                        help='额外发 Host 头（集群入口靠它选虚拟主机）；空 = 不发')
-    parser.add_argument('--referer-path', default=DEFAULT_REFERER_PATH,
-                        help='Referer 路径，与 origin 拼成 <origin><path>')
+    parser.add_argument('--cookie-path', default='',
+                        help='cookie 文件；不传则按 skill 名向 session-manager 取登录态')
+    parser.add_argument('--base-url', default='',
+                        help='平台入口（裸域名补 https://，或完整 origin 含 scheme + 端口）；'
+                             '不传则取 session-manager 登录态里的 requestProfile.baseUrl')
+    parser.add_argument('--host-header', default=None,
+                        help='额外发 Host 头（集群入口靠它选虚拟主机）；'
+                             '不传则取登录态 requestProfile.hostHeader；传空串 = 不发')
+    parser.add_argument('--referer-path', default=None,
+                        help='Referer 路径，与 origin 拼成 <origin><path>；'
+                             '不传则取登录态 requestProfile.referer 的路径')
     parser.add_argument('--company-id', required=True)
-    parser.add_argument('--output-dir', default='tmp/exports')
+    parser.add_argument('--output-dir', default=os.path.join(output_root() or 'tmp', 'exports'),
+                        help='输出目录；集群默认落在 SKILL_OUTPUT_DIR 下')
     parser.add_argument('--batch-size', type=int, default=1000)
     parser.add_argument('--list-page-size', type=int, default=1000)
     parser.add_argument('--concurrency', type=int, default=20, help='export 阶段并发数')
@@ -805,8 +841,32 @@ def parse_args():
     return parser.parse_args()
 
 
+def resolve_session_args(args):
+    """补齐登录态参数：命令行没给入口/cookie 时，按 skill 名向 session-manager 取。
+
+    集群正式入口（node mssw_downloader.js）总会把这两样传进来，走不到这里；
+    直接跑本脚本时才兜底 —— 两边取的是**同一份**登录态，不会跨环境。
+    """
+    if not args.cookie_path or not args.base_url:
+        import muad_session
+        state = muad_session.read_state()
+        if not args.base_url:
+            args.base_url = muad_session.base_url(state)
+        if not args.cookie_path:
+            args.cookie_path = muad_session.write_cookie_file(muad_session.cookie_string(state))
+        if args.host_header is None:
+            args.host_header = muad_session.host_header(state) or ''
+        if not args.referer_path:
+            args.referer_path = muad_session.referer_path(state) or DEFAULT_REFERER_PATH
+    if args.host_header is None:
+        args.host_header = ''
+    if not args.referer_path:
+        args.referer_path = DEFAULT_REFERER_PATH
+    return args
+
+
 def main():
-    args = parse_args()
+    args = resolve_session_args(parse_args())
 
     if not os.path.isfile(args.cookie_path):
         raise SystemExit(f'cookie 文件不存在: {args.cookie_path}')
